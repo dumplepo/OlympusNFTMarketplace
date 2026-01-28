@@ -93,7 +93,7 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
       const tx = await contract.mintNFT(tokenURI, 0, 10);
       await tx.wait();
 
-      await loadNFTs(); // Refresh the list
+      await loadData(); // Refresh the list
       setActiveSection('my-nfts'); // Go to collection
     } catch (err) {
       console.error("Minting process failed:", err);
