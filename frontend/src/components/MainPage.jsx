@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Zap, Wallet, ChevronUp } from 'lucide-react';
+import { BrowserProvider, Contract } from 'ethers'; // ADDED THIS
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../utils/contractConfig'; // ADDED THIS
+
 import StatusBar from './StatusBar';
 import Toolbar from './Toolbar';
 import MyNFTs from './sections/MyNFTs';
@@ -154,19 +157,54 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
     );
   };
 
-  const handleMintNFT = (nft) => {
-    if (!walletAddress) return;
-    const newNFT = {
-      ...nft,
-      id: `nft-${Date.now()}`,
-      tokenId: nfts.length + 1,
-      owner: walletAddress,
-      creator: walletAddress,
-      price: 0,
-      isListed: false,
-    };
-    setNfts(prev => [...prev, newNFT]);
-    setActiveSection('my-nfts');
+// ... inside your MainPage component ...
+
+
+  const handleMintNFT = async (metadata, tokenURI) => {
+    if (!window.ethereum) {
+      alert("Please connect MetaMask");
+      return;
+    }
+
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      
+      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      // Call smart contract: mintNFT(string _tokenURI, uint256 _price, uint256 _royalty)
+      // royalty is retrieved from metadata attributes index [2]
+      const tx = await contract.mintNFT(
+        tokenURI, 
+        0, 
+        parseInt(metadata.attributes[2].value)
+      );
+      
+      await tx.wait(); // Wait for confirmation
+
+      // Update UI with the new NFT
+      const txReceipt = await provider.getTransactionReceipt(tx.hash);
+      // Logic to grab tokenId from receipt can go here, using Date.now() for placeholder
+      const newArtifact = {
+        id: `nft-${Date.now()}`,
+        name: metadata.name,
+        description: metadata.description,
+        image: metadata.image.replace('ipfs://', 'https://ipfs.io/ipfs/'),
+        owner: walletAddress,
+        creator: walletAddress,
+        category: metadata.attributes[0].value,
+        collection: metadata.attributes[1].value,
+        isListed: false,
+        mintedAt: Date.now()
+      };
+
+      setNfts(prev => [newArtifact, ...prev]);
+      setActiveSection('my-nfts'); // Redirect to gallery
+      
+    } catch (err) {
+      console.error("Contract call failed", err);
+      throw err;
+    }
   };
 
   const handlePurchaseRequest = (nftId, offeredPrice) => {

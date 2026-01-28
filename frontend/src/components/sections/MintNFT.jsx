@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { Upload, Sparkles, Image as ImageIcon } from 'lucide-react';
+import { Upload, Sparkles, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { uploadFileToIPFS, uploadJSONToIPFS } from '../../utils/pinata';
 
 const categories = ['Gods', 'Titans', 'Heroes', 'Creatures', 'Artifacts'];
 
 export default function MintNFT({ onMint, onButtonClick }) {
+  const [isMinting, setIsMinting] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [name, setName] = useState('');
@@ -20,45 +22,59 @@ export default function MintNFT({ onMint, onButtonClick }) {
     if (file) {
       setImageFile(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
+      reader.onloadend = () => setImagePreview(reader.result);
       reader.readAsDataURL(file);
     }
   };
 
-  const handleMint = () => {
-    if (!name || !imagePreview || !description || (!collection && !newCollection)) {
-      alert('Please fill in all required fields');
+  const handleMint = async () => {
+    const activeCollection = useNewCollection ? newCollection : collection;
+
+    if (!name || !imageFile || !description || !activeCollection) {
+      alert('The Gods require all fields to be filled before forging.');
       return;
     }
 
-    const nftData = {
-      name,
-      description,
-      image: imagePreview,
-      price: 0,
-      creator: '',
-      category,
-      collection: useNewCollection ? newCollection : collection,
-      isListed: false,
-      royalty: parseFloat(royalty),
-      mintedAt: Date.now(),
-    };
+    onButtonClick(async () => {
+      try {
+        setIsMinting(true);
 
-    onButtonClick(() => {
-      onMint(nftData);
-      // Reset form
-      setImageFile(null);
-      setImagePreview('');
-      setName('');
-      setDescription('');
-      setCollection('');
-      setNewCollection('');
-      setRoyalty('10');
+        // 1. Upload Image to Pinata
+        const imageIpfsUri = await uploadFileToIPFS(imageFile);
+
+        // 2. Prepare Metadata (MetaMask standards)
+        const metadata = {
+          name: name,
+          description: description,
+          image: imageIpfsUri,
+          attributes: [
+            { trait_type: "Category", value: category },
+            { trait_type: "Collection", value: activeCollection },
+            { trait_type: "Royalty", value: royalty }
+          ]
+        };
+
+        // 3. Upload JSON Metadata to Pinata
+        const tokenURI = await uploadJSONToIPFS(metadata);
+
+        // 4. Pass the CID to the blockchain contract
+        await onMint(metadata, tokenURI);
+
+        // Success Reset
+        setImageFile(null);
+        setImagePreview('');
+        setName('');
+        setDescription('');
+        alert('Artifact Successfully Minted! Check your MetaMask NFT tab.');
+        
+      } catch (error) {
+        console.error("The forge failed:", error);
+        alert('The Gods rejected your transaction. Check gas and Pinata keys.');
+      } finally {
+        setIsMinting(false);
+      }
     });
   };
-
   return (
     <div>
       <motion.div
