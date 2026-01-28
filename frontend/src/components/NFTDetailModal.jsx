@@ -4,6 +4,12 @@ import { X, User, Wallet, Calendar, Layers } from 'lucide-react';
 export default function NFTDetailModal({ nft, onClose }) {
   if (!nft) return null;
 
+  // Helper to safely format addresses
+  const formatAddress = (addr) => {
+    if (!addr) return 'Unknown';
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
   const formatDate = (timestamp) => {
     if (!timestamp) return 'Unknown';
     return new Date(timestamp).toLocaleDateString('en-US', {
@@ -79,25 +85,25 @@ export default function NFTDetailModal({ nft, onClose }) {
 
                 {/* Metadata Grid */}
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className="p-4 bg-slate-950/50 rounded-lg border border-amber-900/20">
-                    <div className="flex items-center gap-2 text-gray-400 mb-2">
-                      <User className="w-4 h-4" />
-                      <span className="text-sm">Creator</span>
-                    </div>
-                    <p className="text-white text-sm truncate">
-                      {nft.creator.slice(0, 6)}...{nft.creator.slice(-4)}
-                    </p>
-                  </div>
+    <div className="p-4 bg-slate-950/50 rounded-lg border border-amber-900/20">
+      <div className="flex items-center gap-2 text-gray-400 mb-2">
+        <User className="w-4 h-4" />
+        <span className="text-sm">Creator</span>
+      </div>
+      <p className="text-white text-sm truncate">
+        {formatAddress(nft.creator || nft.owner)}
+      </p>
+    </div>
 
-                  <div className="p-4 bg-slate-950/50 rounded-lg border border-amber-900/20">
-                    <div className="flex items-center gap-2 text-gray-400 mb-2">
-                      <Wallet className="w-4 h-4" />
-                      <span className="text-sm">Owner</span>
-                    </div>
-                    <p className="text-white text-sm truncate">
-                      {nft.owner.slice(0, 6)}...{nft.owner.slice(-4)}
-                    </p>
-                  </div>
+    <div className="p-4 bg-slate-950/50 rounded-lg border border-amber-900/20">
+      <div className="flex items-center gap-2 text-gray-400 mb-2">
+        <Wallet className="w-4 h-4" />
+        <span className="text-sm">Owner</span>
+      </div>
+      <p className="text-white text-sm truncate">
+        {formatAddress(nft.owner)}
+      </p>
+    </div>
 
                   <div className="p-4 bg-slate-950/50 rounded-lg border border-amber-900/20">
                     <div className="flex items-center gap-2 text-gray-400 mb-2">

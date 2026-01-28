@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { motion } from 'motion/react';
-import { DollarSign, Send, Gavel } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { DollarSign, Send, Gavel, X } from 'lucide-react';
+import { BrowserProvider, Contract, parseEther } from 'ethers';
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../utils/contractConfig';
 import NFTCard from '../NFTCard';
 import NFTDetailModal from '../NFTDetailModal';
 
@@ -8,10 +10,10 @@ export default function MyNFTs({
   nfts,
   favorites,
   onToggleFavorite,
-  onListForSale,
-  onTransfer,
-  onCreateAuction,
-  onButtonClick,
+  onSuccess,         // Redirect to Marketplace
+  onAuctionSuccess,  // Redirect to Auctions
+  onTransferSuccess, // Refresh list
+  onButtonClick,     // Lightning effect wrapper
 }) {
   const [selectedNFT, setSelectedNFT] = useState(null);
   const [actionNFT, setActionNFT] = useState(null);
@@ -24,18 +26,43 @@ export default function MyNFTs({
     setDurationValue('');
   };
 
-  const handleConfirmAction = () => {
-    if (!actionNFT) return;
+  const handleConfirmAction = async () => {
+    if (!actionNFT || !window.ethereum) return;
 
-    onButtonClick(() => {
-      if (actionNFT.action === 'sell' && inputValue) {
-        onListForSale(actionNFT.id, parseFloat(inputValue));
-      } else if (actionNFT.action === 'transfer' && inputValue) {
-        onTransfer(actionNFT.id, inputValue);
-      } else if (actionNFT.action === 'auction' && inputValue && durationValue) {
-        onCreateAuction(actionNFT.id, parseFloat(inputValue), parseInt(durationValue));
+    onButtonClick(async () => {
+      try {
+        const provider = new BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+        if (actionNFT.action === 'sell') {
+          if (!inputValue) return alert("Please enter a price");
+          const tx = await contract.listNFTForSale(actionNFT.id, parseEther(inputValue));
+          await tx.wait();
+          // Add a check like this:
+          if (typeof onSuccess === 'function') {
+            onSuccess();
+          } else {
+            console.warn("onSuccess prop not provided to MyNFTs");
+          }
+        }
+        else if (actionNFT.action === 'transfer') {
+          if (!inputValue) return alert("Please enter recipient address");
+          const tx = await contract.transferNFT(actionNFT.id, inputValue);
+          await tx.wait();
+          onTransferSuccess();
+        } 
+        else if (actionNFT.action === 'auction') {
+          if (!inputValue || !durationValue) return alert("Please enter price and duration");
+          const tx = await contract.startAuction(actionNFT.id, parseEther(inputValue), parseInt(durationValue));
+          await tx.wait();
+          onAuctionSuccess();
+        }
+        setActionNFT(null);
+      } catch (err) {
+        console.error("The Gods rejected the transaction:", err);
+        alert("Transaction failed.");
       }
-      setActionNFT(null);
     });
   };
 

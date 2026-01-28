@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'; // Added useRef here
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Zap, Wallet, ChevronUp } from 'lucide-react';
 import { BrowserProvider, Contract, formatEther } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../utils/contractConfig';
 
@@ -8,97 +7,75 @@ import StatusBar from './StatusBar';
 import Toolbar from './Toolbar';
 import MyNFTs from './sections/MyNFTs';
 import Marketplace from './sections/Marketplace';
-import Collections from './sections/Collections';
 import Auctions from './sections/Auctions';
 import MintNFT from './sections/MintNFT';
 import Footer from './Footer';
 import LightningEffect from './LightningEffect';
-import { mockNFTs, mockAuctions } from '../data/mockData';
 
 export default function MainPage({ walletAddress, onConnect, onDisconnect, isConnecting }) {
   const [activeSection, setActiveSection] = useState('marketplace');
   const [showLightning, setShowLightning] = useState(false);
-  const [showBackToTop, setShowBackToTop] = useState(false);
-  const [nfts, setNfts] = useState([]); 
-  const [loading, setLoading] = useState(false);
-  const [auctions, setAuctions] = useState(mockAuctions);
+  const [nfts, setNfts] = useState([]);
+  const [auctions, setAuctions] = useState([]);
   const [favorites, setFavorites] = useState(new Set());
-  const [purchaseRequests, setPurchaseRequests] = useState([]);
   const contentRef = useRef(null);
 
-  // Load NFTs from the Smart Contract
-  const loadNFTs = useCallback(async () => {
+  const loadData = useCallback(async () => {
     if (!window.ethereum || !walletAddress) return;
-    
-    setLoading(true);
     try {
       const provider = new BrowserProvider(window.ethereum);
       const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-      
       const counter = await contract.tokenCounter();
       const items = [];
+      const auctionItems = [];
 
       for (let i = 0; i < counter; i++) {
         const item = await contract.nftItems(i);
-        
         if (item.isMinted) {
           const tokenURI = await contract.tokenURI(i);
           const gatewayURL = tokenURI.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/');
-          
-          try {
-            const response = await fetch(gatewayURL);
-            const metadata = await response.json();
+          const response = await fetch(gatewayURL);
+          const metadata = await response.json();
 
-            items.push({
-              id: i.toString(),
-              tokenId: i.toString(),
-              name: metadata.name,
-              description: metadata.description,
-              image: metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/'),
-              price: formatEther(item.price),
-              owner: item.owner.toLowerCase(),
-              creator: item.owner.toLowerCase(),
-              category: metadata.attributes?.find(a => a.trait_type === "Category")?.value || "Artifacts",
-              collection: metadata.attributes?.find(a => a.trait_type === "Collection")?.value || "Olympus",
-              isListed: item.isForSale,
-              mintedAt: Date.now(),
+          const nftObj = {
+            id: i.toString(),
+            tokenId: i.toString(),
+            name: metadata.name,
+            description: metadata.description,
+            image: metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/'),
+            price: parseFloat(formatEther(item.price)),
+            owner: item.owner.toLowerCase(),
+            isListed: item.isForSale,
+            inAuction: item.isInAuction,
+            category: metadata.attributes?.find(a => a.trait_type === "Category")?.value || "Artifacts",
+          };
+
+          items.push(nftObj);
+          if (item.isInAuction) {
+            auctionItems.push({
+              id: `auction-${i}`,
+              nft: nftObj,
+              currentBid: parseFloat(formatEther(item.highestBid)),
+              highestBidder: item.highestBidder,
+              endTime: Number(item.auctionEndTime) * 1000,
+              timeRemaining: (Number(item.auctionEndTime) * 1000) - Date.now(),
+              bids: []
             });
-          } catch (e) {
-            console.error("Metadata fetch error for token", i, e);
           }
         }
       }
       setNfts(items);
+      setAuctions(auctionItems);
     } catch (error) {
-      console.error("Error loading divine artifacts:", error);
-    } finally {
-      setLoading(false);
+      console.error("Error loading data:", error);
     }
   }, [walletAddress]);
 
-  useEffect(() => {
-    loadNFTs();
-  }, [loadNFTs, walletAddress]);
-
-  // Handle Scroll logic for the Back to Top button
-  useEffect(() => {
-    const handleScroll = () => {
-      if (contentRef.current) {
-        const scrolled = contentRef.current.scrollTop;
-        setShowBackToTop(scrolled > 1000);
-      }
-    };
-    const container = contentRef.current;
-    container?.addEventListener('scroll', handleScroll);
-    return () => container?.removeEventListener('scroll', handleScroll);
-  }, []);
+  useEffect(() => { loadData(); }, [loadData, walletAddress]);
 
   const handleButtonClick = (callback) => {
     setShowLightning(true);
-    setTimeout(() => {
-      if(callback) callback();
-      setShowLightning(false);
-    }, 300);
+    setTimeout(() => { if(callback) callback(); setShowLightning(false); }, 300);
   };
 
   const scrollToTop = () => {
@@ -157,8 +134,36 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
           <div className="container mx-auto px-6 py-12">
             <AnimatePresence mode="wait">
               {activeSection === 'my-nfts' && (
-                <motion.div key="my-nfts" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                  <MyNFTs nfts={myNFTs} favorites={favorites} onButtonClick={handleButtonClick} />
+                <motion.div 
+                  key="my-nfts" 
+                  initial={{ opacity: 0, y: 20 }} 
+                  animate={{ opacity: 1, y: 0 }} 
+                  exit={{ opacity: 0, y: -20 }}
+                >
+                  <MyNFTs 
+                    nfts={nfts.filter(nft => nft.owner === walletAddress?.toLowerCase())} 
+                    favorites={favorites} 
+                    // This is what was missing:
+                    onSuccess={() => {
+                      loadData(); // Refresh the blockchain data
+                      setActiveSection('marketplace'); // Redirect to Marketplace
+                    }}
+                    onAuctionSuccess={() => {
+                      loadData();
+                      setActiveSection('auctions'); // Redirect to Auctions
+                    }}
+                    onTransferSuccess={() => {
+                      loadData(); // Just refresh the list
+                      alert("Sacred Transfer Complete!");
+                    }}
+                    onButtonClick={handleButtonClick}
+                    onToggleFavorite={(id) => {
+                      const newFavs = new Set(favorites);
+                      if (newFavs.has(id)) newFavs.delete(id);
+                      else newFavs.add(id);
+                      setFavorites(newFavs);
+                    }}
+                  />
                 </motion.div>
               )}
 
@@ -181,7 +186,7 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
         </div>
 
         <AnimatePresence>
-          {showBackToTop && (
+          {scrollToTop && (
             <motion.button
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -189,7 +194,7 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
               onClick={() => handleButtonClick(scrollToTop)}
               className="fixed bottom-8 right-8 z-50 p-4 bg-amber-500 text-black rounded-full"
             >
-              <ChevronUp className="w-6 h-6" />
+              {/* <ChevronUp className="w-6 h-6" /> */}
             </motion.button>
           )}
         </AnimatePresence>
