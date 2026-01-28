@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { BrowserProvider } from 'ethers';
 import LandingPage from './components/LandingPage';
 import MainPage from './components/MainPage';
 import './styles/globals.css';
@@ -9,18 +10,64 @@ export default function App() {
   const [walletAddress, setWalletAddress] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
 
+  const handleAccountsChanged = useCallback((accounts) => {
+    if (accounts.length > 0) {
+      setWalletAddress(accounts[0]);
+    } else {
+    setWalletAddress(null);
+    setCurrentView('landing');
+    }
+  }, []);
+
+  const checkConnection = useCallback(async () => {
+    if (window.ethereum) {
+      try {
+        const provider = new BrowserProvider(window.ethereum);
+        const accounts = await provider.listAccounts();
+        if (accounts.length > 0) {
+          setWalletAddress(accounts[0].address);
+        }
+      } catch (error) {
+        console.error("Failed to check connection", error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    checkConnection();
+    
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', () => window.location.reload());
+    }
+
+    return () => {
+      if (window.ethereum && window.ethereum.removeListener) {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      }
+  };
+  }, [handleAccountsChanged, checkConnection]);
+
   const handleEnterMarketplace = () => {
     setCurrentView('main');
   };
 
   const connectWallet = async () => {
+    if (typeof window.ethereum === 'undefined') {
+      alert('Please install MetaMask to interact with Olympus NFT Marketplace!');
+      return;
+    }
+
     setIsConnecting(true);
-    // Mock wallet connection
-    setTimeout(() => {
-      const mockAddress = '0x' + Math.random().toString(16).substr(2, 40);
-      setWalletAddress(mockAddress);
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const accounts = await provider.send("eth_requestAccounts", []);
+      setWalletAddress(accounts[0]);
+    } catch (error) {
+      console.error("Wallet connection denied or failed", error);
+    } finally {
       setIsConnecting(false);
-    }, 1500);
+    }
   };
 
   const disconnectWallet = () => {
