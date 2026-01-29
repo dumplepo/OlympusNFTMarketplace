@@ -12,6 +12,15 @@ import MintNFT from './sections/MintNFT';
 import Footer from './Footer';
 import LightningEffect from './LightningEffect';
 
+const fetchMetadata = async (url) => {
+  try {
+    const response = await fetch(url.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/'));
+    return await response.json();
+  } catch (err) {
+    return { name: "Unknown Artifact", image: "", attributes: [] };
+  }
+};
+
 export default function MainPage({ walletAddress, onConnect, onDisconnect, isConnecting }) {
   const [activeSection, setActiveSection] = useState('marketplace');
   const [showLightning, setShowLightning] = useState(false);
@@ -25,7 +34,9 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
 
     try {
       const provider = new BrowserProvider(window.ethereum);
-      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+      const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
       const counter = await contract.tokenCounter();
 
       const tempNfts = [];
@@ -45,7 +56,8 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
             id: i.toString(),
             tokenId: i.toString(),
             name: metadata.name,
-            image: metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/'),
+            image: metadata.image ? metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/') : '',
+            // image: metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/'),
             owner: item.owner.toLowerCase(),
             price: formatEther(item.price),
             isListed: item.isForSale,      // matches item.isForSale
@@ -208,7 +220,7 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
 
               {activeSection === 'mint' && (
                 <motion.div key="mint" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                  <MintNFT onMint={handleMintNFT} onButtonClick={handleButtonClick} />
+                  <MintNFT onMint={handleMint} onButtonClick={handleButtonClick} />
                 </motion.div>
               )}
 
