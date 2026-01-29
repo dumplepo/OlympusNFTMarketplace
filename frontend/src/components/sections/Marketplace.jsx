@@ -20,9 +20,10 @@ export default function Marketplace({
 
   // Filter and sort NFTs
   let filteredNFTs = nfts.filter((nft) => {
+    const isListed = nft.isListed === true;
     const matchesSearch = nft.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesPrice = nft.price >= priceRange[0] && nft.price <= priceRange[1];
-    return matchesSearch && matchesPrice;
+    return isListed && matchesSearch && matchesPrice;
   });
 
   if (sortBy === 'price-low') {
@@ -109,15 +110,18 @@ export default function Marketplace({
       </motion.div>
 
       {/* NFT Grid */}
+
       {filteredNFTs.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-gray-400 text-xl">No NFTs found</p>
-          <p className="text-gray-500 mt-2">Try adjusting your filters</p>
+          <p className="text-gray-400 text-xl">The marketplace is currently empty</p>
         </div>
       ) : (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-            {filteredNFTs.slice(0, 4).map((nft, index) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredNFTs.map((nft, index) => {
+            // Case-insensitive check to see if YOU are the owner
+            const isMine = nft.owner.toLowerCase() === walletAddress?.toLowerCase();
+
+            return (
               <NFTCard
                 key={nft.id}
                 nft={nft}
@@ -126,7 +130,8 @@ export default function Marketplace({
                 onCardClick={() => setSelectedNFT(nft)}
                 index={index}
                 actions={
-                  nft.owner === walletAddress ? (
+                  isMine ? (
+                    /* If it's mine: Show ONLY Cancel */
                     <button
                       onClick={() => onButtonClick(() => onCancelSale(nft.id))}
                       className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
@@ -135,10 +140,11 @@ export default function Marketplace({
                       Cancel Sale
                     </button>
                   ) : (
+                    /* If it's someone else's: Show ONLY Buy */
                     <button
-                      onClick={() => onButtonClick(() => onBuy(nft.id))}
+                      onClick={() => onButtonClick(() => onBuy(nft.id, nft.price))}
                       disabled={!walletAddress}
-                      className="w-full px-4 py-2 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-black rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-2 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-black rounded-lg font-bold transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       <ShoppingCart className="w-4 h-4" />
                       Buy Now
@@ -146,44 +152,10 @@ export default function Marketplace({
                   )
                 }
               />
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredNFTs.slice(4).map((nft, index) => (
-              <NFTCard
-                key={nft.id}
-                nft={nft}
-                isFavorite={favorites.has(nft.id)}
-                onToggleFavorite={() => onToggleFavorite(nft.id)}
-                onCardClick={() => setSelectedNFT(nft)}
-                index={index + 4}
-                actions={
-                  nft.owner === walletAddress ? (
-                    <button
-                      onClick={() => onButtonClick(() => onCancelSale(nft.id))}
-                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-                    >
-                      <X className="w-4 h-4" />
-                      Cancel Sale
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => onButtonClick(() => onBuy(nft.id))}
-                      disabled={!walletAddress}
-                      className="w-full px-4 py-2 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-black rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <ShoppingCart className="w-4 h-4" />
-                      Buy Now
-                    </button>
-                  )
-                }
-              />
-            ))}
-          </div>
-        </>
+            );
+          })}
+        </div>
       )}
-
       {/* NFT Detail Modal */}
       {selectedNFT && (
         <NFTDetailModal nft={selectedNFT} onClose={() => setSelectedNFT(null)} />
