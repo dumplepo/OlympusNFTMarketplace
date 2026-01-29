@@ -5,7 +5,7 @@ import { BrowserProvider, Contract, parseEther } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../utils/contractConfig';
 import NFTDetailModal from '../NFTDetailModal';
 
-export default function Auctions({ auctions, walletAddress, onButtonClick }) {
+export default function Auctions({ auctions, walletAddress, onButtonClick, onSuccess }) {
   const [selectedNFT, setSelectedNFT] = useState(null);
   const [activeBidAuction, setActiveBidAuction] = useState(null);
   const [bidAmount, setBidAmount] = useState('');
@@ -44,9 +44,11 @@ export default function Auctions({ auctions, walletAddress, onButtonClick }) {
         
         await tx.wait();
         alert("Sacrifice accepted! You are the high bidder.");
-        // setActiveBidAuction(null);
-        // setBidAmount('');
-        window.location.reload(); // Refresh data
+        // REPLACEMENT FOR RELOAD:
+        setActiveBidAuction(null); // Close modal
+        setBidAmount('');          // Reset input
+
+        if (onSuccess) await onSuccess(); // Trigger data refresh in parent
       } catch (err) {
         console.error("Bid failed:", err);
         alert("The Gods rejected your bid. Ensure it is higher than the current one.");
@@ -64,7 +66,7 @@ export default function Auctions({ auctions, walletAddress, onButtonClick }) {
         const tx = await contract.endAuction(tokenId);
         await tx.wait();
         alert("The Auction has concluded. Artficat has been transferred.");
-        window.location.reload();
+        if (onSuccess) await onSuccess();
       } catch (err) {
         console.error("End auction failed:", err);
         alert("Could not end auction yet.");
