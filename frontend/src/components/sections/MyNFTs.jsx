@@ -109,23 +109,30 @@ export default function MyNFTs({
                         </div>
                       ) : (
                         <div className="flex gap-2">
-                          <button onClick={() => handleAction(nft.id, 'sell')} className="flex-1 px-2 py-2 bg-green-600/20 hover:bg-green-600 border border-green-600/50 text-white rounded-lg transition-all text-xs font-bold">
-                            SELL
+                          <button onClick={() => handleAction(nft.id, 'sell')}
+                            className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
+                          >
+                            <DollarSign className="w-4 h-4" />
+                            Sell
                           </button>
-                          <button onClick={() => handleAction(nft.id, 'auction')} className="flex-1 px-2 py-2 bg-purple-600/20 hover:bg-purple-600 border border-purple-600/50 text-white rounded-lg transition-all text-xs font-bold">
-                            AUCTION
-                          </button>
+                          <button
+                          onClick={() => handleAction(nft.id, 'auction')}
+                          className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
+                        >
+                          <Gavel className="w-4 h-4" />
+                          Auction
+                        </button>
                         </div>
                       )}
                       
                       {/* Transfer remains available unless in auction */}
                     {!nft.inAuction && (
-                      <button 
-                        onClick={() => handleAction(nft.id, 'transfer')} 
-                        disabled={nft.inAuction}
-                        className={`w-full py-2 ${nft.inAuction ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-blue-600/20 hover:bg-blue-600 border border-blue-600/50 text-white'} rounded-lg transition-all text-xs font-bold flex items-center justify-center gap-1`}
+                      <button
+                        onClick={() => handleAction(nft.id, 'transfer')}
+                        className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
                       >
-                        <Send className="w-3 h-3" /> TRANSFER
+                        <Send className="w-4 h-4" />
+                        Transfer
                       </button>
                     )}
                   </div>
