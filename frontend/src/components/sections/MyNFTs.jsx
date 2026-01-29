@@ -55,8 +55,10 @@ export default function MyNFTs({
         else if (actionNFT.action === 'auction') {
           if (!inputValue || !durationValue) return alert("Please enter price and duration");
           const tx = await contract.startAuction(actionNFT.id, parseEther(inputValue), parseInt(durationValue));
-          await tx.wait();
-          onAuctionSuccess();
+          await tx.wait(); // Wait for blockchain confirmation
+          
+          // This must be called to refresh the data and switch tabs
+          onAuctionSuccess(); 
         }
         setActionNFT(null);
       } catch (err) {
@@ -85,41 +87,52 @@ export default function MyNFTs({
         <>
           {/* Two rows of NFTs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-            {nfts.slice(0, 4).map((nft, index) => (
-              <NFTCard
-                key={nft.id}
-                nft={nft}
-                isFavorite={favorites.has(nft.id)}
-                onToggleFavorite={() => onToggleFavorite(nft.id)}
-                onCardClick={() => setSelectedNFT(nft)}
-                index={index}
-                actions={
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleAction(nft.id, 'sell')}
-                      className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
-                    >
-                      <DollarSign className="w-4 h-4" />
-                      Sell
-                    </button>
-                    <button
-                      onClick={() => handleAction(nft.id, 'transfer')}
-                      className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
-                    >
-                      <Send className="w-4 h-4" />
-                      Transfer
-                    </button>
-                    <button
-                      onClick={() => handleAction(nft.id, 'auction')}
-                      className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
-                    >
-                      <Gavel className="w-4 h-4" />
-                      Auction
-                    </button>
+            {nfts.map((nft, index) => {
+              // Check if the NFT has an active status
+              const isActive = nft.isListed || nft.inAuction;
+
+              return (
+                <NFTCard
+                  key={nft.id}
+                  nft={nft}
+                  isFavorite={favorites.has(nft.id)}
+                  onToggleFavorite={() => onToggleFavorite(nft.id)}
+                  onCardClick={() => setSelectedNFT(nft)}
+                  index={index}
+                  actions={
+                    <div className="flex flex-col gap-2">
+                      {isActive ? (
+                        <div className="w-full py-2 bg-amber-900/20 border border-amber-500/30 rounded-lg text-center">
+                          <span className="text-amber-500 text-xs font-bold uppercase tracking-widest">
+                            {nft.inAuction ? '⚔️ In Auction' : '💰 Listed for Sale'}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button onClick={() => handleAction(nft.id, 'sell')} className="flex-1 px-2 py-2 bg-green-600/20 hover:bg-green-600 border border-green-600/50 text-white rounded-lg transition-all text-xs font-bold">
+                            SELL
+                          </button>
+                          <button onClick={() => handleAction(nft.id, 'auction')} className="flex-1 px-2 py-2 bg-purple-600/20 hover:bg-purple-600 border border-purple-600/50 text-white rounded-lg transition-all text-xs font-bold">
+                            AUCTION
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Transfer remains available unless in auction */}
+                    {!nft.inAuction && (
+                      <button 
+                        onClick={() => handleAction(nft.id, 'transfer')} 
+                        disabled={nft.inAuction}
+                        className={`w-full py-2 ${nft.inAuction ? 'bg-gray-800 text-gray-600 cursor-not-allowed' : 'bg-blue-600/20 hover:bg-blue-600 border border-blue-600/50 text-white'} rounded-lg transition-all text-xs font-bold flex items-center justify-center gap-1`}
+                      >
+                        <Send className="w-3 h-3" /> TRANSFER
+                      </button>
+                    )}
                   </div>
                 }
               />
-            ))}
+            );
+          })}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

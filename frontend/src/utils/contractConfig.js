@@ -5,6 +5,8 @@ export const CONTRACT_ABI = [
   "function listNFTForSale(uint256 tokenId, uint256 price) public",
   "function transferNFT(uint256 tokenId, address to) public",
   "function startAuction(uint256 tokenId, uint256 startingPrice, uint256 duration) public",
+  "function placeBid(uint256 tokenId) public payable",
+  "function endAuction(uint256 tokenId) public",
   "function tokenCounter() public view returns (uint256)",
   "function tokenURI(uint256 tokenId) public view returns (string)",
   "function nftItems(uint256) public view returns (uint256 tokenId, address owner, uint256 price, bool isForSale, bool isInAuction, uint256 auctionStartTime, uint256 auctionEndTime, uint256 highestBid, address highestBidder, bool isMinted)",

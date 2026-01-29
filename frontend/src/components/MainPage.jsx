@@ -22,52 +22,57 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
 
   const loadData = useCallback(async () => {
     if (!window.ethereum || !walletAddress) return;
+
     try {
       const provider = new BrowserProvider(window.ethereum);
       const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
       const counter = await contract.tokenCounter();
-      const items = [];
-      const auctionItems = [];
 
-      for (let i = 0; i < counter; i++) {
+      const tempNfts = [];
+      const tempAuctions = [];
+
+      for (let i = 0; i < Number(counter); i++) {
         const item = await contract.nftItems(i);
+        
+        // Safety Log: Remove this after it works!
+        console.log(`Token #${i} State:`, { isForSale: item.isForSale, isInAuction: item.isInAuction });
+
         if (item.isMinted) {
-          const tokenURI = await contract.tokenURI(i);
-          const gatewayURL = tokenURI.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/');
-          const response = await fetch(gatewayURL);
-          const metadata = await response.json();
+          const tokenUri = await contract.tokenURI(i);
+          const metadata = await fetchMetadata(tokenUri);
 
           const nftObj = {
             id: i.toString(),
             tokenId: i.toString(),
             name: metadata.name,
-            description: metadata.description,
             image: metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/'),
-            price: parseFloat(formatEther(item.price)),
             owner: item.owner.toLowerCase(),
-            isListed: item.isForSale,
-            inAuction: item.isInAuction,
-            category: metadata.attributes?.find(a => a.trait_type === "Category")?.value || "Artifacts",
+            price: formatEther(item.price),
+            isListed: item.isForSale,      // matches item.isForSale
+            inAuction: item.isInAuction,   // matches item.isInAuction
+            category: metadata.attributes?.[0]?.value || "Artifact"
           };
 
-          items.push(nftObj);
+          tempNfts.push(nftObj);
+
+          // This checks if the blockchain says the NFT is in an auction
           if (item.isInAuction) {
-            auctionItems.push({
+            tempAuctions.push({
               id: `auction-${i}`,
               nft: nftObj,
-              currentBid: parseFloat(formatEther(item.highestBid)),
+              currentBid: formatEther(item.highestBid), // matches item.highestBid
               highestBidder: item.highestBidder,
-              endTime: Number(item.auctionEndTime) * 1000,
-              timeRemaining: (Number(item.auctionEndTime) * 1000) - Date.now(),
-              bids: []
+              endTime: Number(item.auctionEndTime) * 1000, // matches item.auctionEndTime
             });
           }
         }
       }
-      setNfts(items);
-      setAuctions(auctionItems);
+
+      setNfts(tempNfts);
+      setAuctions(tempAuctions); // This populates the Auction Section
     } catch (error) {
-      console.error("Error loading data:", error);
+      console.error("The Gods failed to deliver data:", error);
+      alert("Connection to the Divine Network lost. Please check your RPC/MetaMask.");
     }
   }, [walletAddress]);
 
@@ -82,25 +87,53 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
     contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleMintNFT = async (metadata, tokenURI) => {
-    if (!window.ethereum) return;
+  const handleMint = async (metadata, tokenURI) => {
     try {
       const provider = new BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      // Assuming your contract mintNFT takes (uri, price, royalty)
+      // 1. Execute the mint transaction (price 0, royalty 10% example)
       const tx = await contract.mintNFT(tokenURI, 0, 10);
-      await tx.wait();
+      const receipt = await tx.wait();
 
-      await loadData(); // Refresh the list
-      setActiveSection('my-nfts'); // Go to collection
-    } catch (err) {
-      console.error("Minting process failed:", err);
-      throw err;
+      // 2. Extract Token ID from the NFTMinted event logs
+      const event = receipt.logs
+        .map((log) => {
+          try { return contract.interface.parseLog(log); } 
+          catch (e) { return null; }
+        })
+        .find((log) => log && log.name === 'NFTMinted');
+
+      if (event) {
+        const tokenId = event.args.tokenId.toString();
+        
+        // 3. Request MetaMask to track the new NFT
+        try {
+          await window.ethereum.request({
+            method: 'wallet_watchAsset',
+            params: {
+              type: 'ERC721',
+              options: {
+                address: CONTRACT_ADDRESS,
+                tokenId: tokenId,
+              },
+            },
+          });
+        } catch (watchError) {
+          console.warn("MetaMask did not add the asset automatically:", watchError);
+          // Fallback: Notify user to add it manually
+          alert(`Artifact Minted! If it doesn't appear, manually import ID: ${tokenId} in MetaMask.`);
+        }
+      }
+
+      // Refresh UI
+      await loadData();
+    } catch (error) {
+      console.error("The forge failed at the altar:", error);
+      throw error; // Rethrow so MintNFT.jsx can handle the state
     }
   };
-
   // Filter for 'My NFTs' section
   const myNFTs = nfts.filter(nft => nft.owner === walletAddress?.toLowerCase());
   const listedNFTs = nfts.filter(nft => nft.isListed);
@@ -177,6 +210,14 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
                 <motion.div key="mint" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
                   <MintNFT onMint={handleMintNFT} onButtonClick={handleButtonClick} />
                 </motion.div>
+              )}
+
+              {activeSection === 'auctions' && (
+                <Auctions 
+                  auctions={auctions} // Check that this variable is the one we set in loadData
+                  walletAddress={walletAddress} 
+                  onButtonClick={handleButtonClick} 
+                />
               )}
               
               {/* Add other sections as needed following this pattern */}
