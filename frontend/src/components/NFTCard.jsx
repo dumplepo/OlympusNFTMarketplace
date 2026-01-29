@@ -30,7 +30,7 @@ export default function NFTCard({
         {/* Image Section (61.8%) */}
         <div
           className="relative w-full overflow-hidden cursor-pointer"
-          style={{ height: '70%' }}
+          style={{ height: '65%' }}
           onClick={onCardClick}
         >
           <motion.img
@@ -80,23 +80,17 @@ export default function NFTCard({
         {/* Info Section (38.2%) */}
         <div
           className="relative p-4 flex flex-col justify-between"
-          style={{ height: '30%' }}
+          style={{ height: '35%' }}
         >
           <div onClick={onCardClick} className="cursor-pointer">
-            <h3 className="text-amber-400 mb-1 truncate">{nft.name}</h3>
-            <p className="text-xs text-gray-400 mb-2">
-              Token #{nft.tokenId}
-            </p>
-          </div>
-
-          {nft.price > 0 && (
+            <h1 className="text-amber-400 mb-1 truncate">{nft.name}</h1>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400">Price</span>
+              <span className="text-s text-gray-400">Token #{nft.tokenId}</span>
               <span className="text-lg text-amber-400">
                 {nft.price} ETH
               </span>
             </div>
-          )}
+          </div>
 
           {/* Action buttons */}
           {actions && (
