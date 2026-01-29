@@ -15,7 +15,7 @@ export default function Marketplace({
 }) {
   const [selectedNFT, setSelectedNFT] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [priceRange, setPriceRange] = useState([0, 100]);
+  const [priceRange, setPriceRange] = useState([0, 10000]);
   const [sortBy, setSortBy] = useState('recent');
 
   // Filter and sort NFTs
