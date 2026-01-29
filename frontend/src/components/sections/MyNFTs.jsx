@@ -159,44 +159,6 @@ export default function MyNFTs({
             );
           })}
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {nfts.slice(4).map((nft, index) => (
-              <NFTCard
-                key={nft.id}
-                nft={nft}
-                isFavorite={favorites.has(nft.id)}
-                onToggleFavorite={() => onToggleFavorite(nft.id)}
-                onCardClick={() => setSelectedNFT(nft)}
-                index={index + 4}
-                actions={
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleAction(nft.id, 'sell')}
-                      className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
-                    >
-                      <DollarSign className="w-4 h-4" />
-                      Sell
-                    </button>
-                    <button
-                      onClick={() => handleAction(nft.id, 'transfer')}
-                      className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
-                    >
-                      <Send className="w-4 h-4" />
-                      Transfer
-                    </button>
-                    <button
-                      onClick={() => handleAction(nft.id, 'auction')}
-                      className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
-                    >
-                      <Gavel className="w-4 h-4" />
-                      Auction
-                    </button>
-                  </div>
-                }
-              />
-            ))}
-          </div>
         </>
       )}
 

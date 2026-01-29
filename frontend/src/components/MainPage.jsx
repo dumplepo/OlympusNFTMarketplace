@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BrowserProvider, Contract, formatEther } from 'ethers';
+import { BrowserProvider, Contract, formatEther, parseEther } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../utils/contractConfig';
 
 import StatusBar from './StatusBar';
@@ -150,6 +150,36 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
   const myNFTs = nfts.filter(nft => nft.owner === walletAddress?.toLowerCase());
   const listedNFTs = nfts.filter(nft => nft.isListed);
 
+  const handleBuy = async (id, price) => {
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      const tx = await contract.buyNFT(id, { value: parseEther(price) });
+      await tx.wait();
+      loadData(); // This refreshes the state, moving the NFT to "My NFTs"
+    } catch (err) {
+      console.error("Purchase rejected:", err);
+    }
+  };
+
+  const handleCancelSale = async (id) => {
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      const tx = await contract.cancelSale(id);
+      await tx.wait();
+      loadData(); // This refreshes the state, "removing" it from Marketplace
+    } catch (err) {
+      console.error("Cancel rejected:", err);
+    }
+  };
+
+
+
   return (
     <div className="relative w-full min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black">
       <div className="fixed inset-0 z-0 pointer-events-none">
@@ -214,7 +244,21 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
 
               {activeSection === 'marketplace' && (
                 <motion.div key="marketplace" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-                  <Marketplace nfts={listedNFTs} favorites={favorites} walletAddress={walletAddress} onButtonClick={handleButtonClick} />
+                  <Marketplace 
+                    nfts={listedNFTs} 
+                    favorites={favorites} 
+                    walletAddress={walletAddress} 
+                    onButtonClick={handleButtonClick}
+                    // Pass these missing functions:
+                    onBuy={handleBuy}
+                    onCancelSale={handleCancelSale}
+                    onToggleFavorite={(id) => {
+                      const newFavs = new Set(favorites);
+                      if (newFavs.has(id)) newFavs.delete(id);
+                      else newFavs.add(id);
+                      setFavorites(newFavs);
+                    }}
+                  />
                 </motion.div>
               )}
 

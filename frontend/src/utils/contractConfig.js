@@ -4,6 +4,7 @@ export const CONTRACT_ABI = [
   "function mintNFT(string _tokenURI, uint256 _price, uint256 _royalty) public returns (uint256)",
   "function listNFTForSale(uint256 tokenId, uint256 price) public",
   "function cancelSale(uint256 tokenId) public",
+  "function buyNFT(uint256 tokenId) public payable",
   "function transferNFT(uint256 tokenId, address to) public",
   "function startAuction(uint256 tokenId, uint256 startingPrice, uint256 duration) public",
   "function placeBid(uint256 tokenId) public payable",
