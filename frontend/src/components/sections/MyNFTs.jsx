@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DollarSign, Send, Gavel, X } from 'lucide-react';
+import { DollarSign, Send, Gavel, X, Ban } from 'lucide-react';
 import { BrowserProvider, Contract, parseEther } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../utils/contractConfig';
 import NFTCard from '../NFTCard';
@@ -10,10 +10,10 @@ export default function MyNFTs({
   nfts,
   favorites,
   onToggleFavorite,
-  onSuccess,         // Redirect to Marketplace
-  onAuctionSuccess,  // Redirect to Auctions
-  onTransferSuccess, // Refresh list
-  onButtonClick,     // Lightning effect wrapper
+  onSuccess,
+  onAuctionSuccess,
+  onTransferSuccess,
+  onButtonClick,
 }) {
   const [selectedNFT, setSelectedNFT] = useState(null);
   const [actionNFT, setActionNFT] = useState(null);
@@ -39,13 +39,21 @@ export default function MyNFTs({
           if (!inputValue) return alert("Please enter a price");
           const tx = await contract.listNFTForSale(actionNFT.id, parseEther(inputValue));
           await tx.wait();
-          // Add a check like this:
           if (typeof onSuccess === 'function') {
             onSuccess();
           } else {
             console.warn("onSuccess prop not provided to MyNFTs");
           }
         }
+        else if (actionNFT.action === 'cancel') {
+          const currentNft = nfts.find(n => n.id === actionNFT.id);
+          // If in auction, use endAuction, otherwise use cancelSale
+          const tx = currentNft.inAuction 
+            ? await contract.endAuction(actionNFT.id) 
+            : await contract.cancelSale(actionNFT.id);
+          await tx.wait();
+          onTransferSuccess(); // Refresh list
+        }        
         else if (actionNFT.action === 'transfer') {
           if (!inputValue) return alert("Please enter recipient address");
           const tx = await contract.transferNFT(actionNFT.id, inputValue);
@@ -102,12 +110,23 @@ export default function MyNFTs({
                   actions={
                     <div className="flex flex-col gap-2">
                       {isActive ? (
-                        <div className="w-full py-2 bg-amber-900/20 border border-amber-500/30 rounded-lg text-center">
-                          <span className="text-amber-500 text-xs font-bold uppercase tracking-widest">
-                            {nft.inAuction ? '⚔️ In Auction' : '💰 Listed for Sale'}
-                          </span>
-                        </div>
+                        /* LISTED STATE: Show Status and Cancel only */
+                        <>
+                          <div className="w-full py-2 bg-amber-900/20 border border-amber-500/30 rounded-lg text-center">
+                            <span className="text-amber-500 text-xs font-bold uppercase tracking-widest">
+                              {nft.inAuction ? '⚔️ In Auction' : '💰 Listed for Sale'}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleAction(nft.id, 'cancel')}
+                            className="w-full px-3 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
+                          >
+                            <X className="w-4 h-4" />
+                            Cancel Listing
+                          </button>
+                        </>
                       ) : (
+                      <div>
                         <div className="flex gap-2">
                           <button onClick={() => handleAction(nft.id, 'sell')}
                             className="flex-1 px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
@@ -116,25 +135,24 @@ export default function MyNFTs({
                             Sell
                           </button>
                           <button
-                          onClick={() => handleAction(nft.id, 'auction')}
-                          className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
-                        >
-                          <Gavel className="w-4 h-4" />
-                          Auction
-                        </button>
+                            onClick={() => handleAction(nft.id, 'auction')}
+                            className="flex-1 px-3 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
+                          >
+                            <Gavel className="w-4 h-4" />
+                            Auction
+                          </button>
                         </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAction(nft.id, 'transfer')}
+                            className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
+                          >
+                            <Send className="w-4 h-4" />
+                            Transfer
+                          </button>
+                        </div>
+                      </div>
                       )}
-                      
-                      {/* Transfer remains available unless in auction */}
-                    {!nft.inAuction && (
-                      <button
-                        onClick={() => handleAction(nft.id, 'transfer')}
-                        className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
-                      >
-                        <Send className="w-4 h-4" />
-                        Transfer
-                      </button>
-                    )}
                   </div>
                 }
               />
@@ -260,8 +278,22 @@ export default function MyNFTs({
                 onClick={handleConfirmAction}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-amber-600 to-yellow-500 text-black rounded-lg hover:shadow-[0_0_30px_rgba(251,191,36,0.5)] transition-all duration-300"
               >
-                Confirm
+                Ok
               </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Action Modal (Update the text for cancel) */}
+      {actionNFT && actionNFT.action === 'cancel' && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-slate-900 p-8 rounded-2xl border-2 border-red-900/40 max-w-sm w-full text-center">
+            <h3 className="text-2xl text-red-500 mb-4">Cancel Listing?</h3>
+            <p className="text-gray-400 mb-8">This will remove your NFT from the marketplace and return it to your private collection.</p>
+            <div className="flex gap-4">
+              <button onClick={() => setActionNFT(null)} className="flex-1 px-6 py-3 bg-slate-700 text-white rounded-lg">No, Keep It</button>
+              <button onClick={handleConfirmAction} className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg">Yes, Cancel</button>
             </div>
           </motion.div>
         </div>
