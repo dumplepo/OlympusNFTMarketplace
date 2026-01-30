@@ -5,7 +5,7 @@ import { BrowserProvider, Contract, parseEther } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../utils/contractConfig';
 import NFTDetailModal from '../NFTDetailModal';
 
-export default function Auctions({ auctions, walletAddress, onButtonClick }) {
+export default function Auctions({ auctions, walletAddress, onButtonClick, onSuccess }) {
   const [selectedNFT, setSelectedNFT] = useState(null);
   const [activeBidAuction, setActiveBidAuction] = useState(null);
   const [bidAmount, setBidAmount] = useState('');
@@ -44,9 +44,11 @@ export default function Auctions({ auctions, walletAddress, onButtonClick }) {
         
         await tx.wait();
         alert("Sacrifice accepted! You are the high bidder.");
-        // setActiveBidAuction(null);
-        // setBidAmount('');
-        window.location.reload(); // Refresh data
+        // REPLACEMENT FOR RELOAD:
+        setActiveBidAuction(null); // Close modal
+        setBidAmount('');          // Reset input
+
+        if (onSuccess) await onSuccess(); // Trigger data refresh in parent
       } catch (err) {
         console.error("Bid failed:", err);
         alert("The Gods rejected your bid. Ensure it is higher than the current one.");
@@ -64,7 +66,7 @@ export default function Auctions({ auctions, walletAddress, onButtonClick }) {
         const tx = await contract.endAuction(tokenId);
         await tx.wait();
         alert("The Auction has concluded. Artficat has been transferred.");
-        window.location.reload();
+        if (onSuccess) await onSuccess();
       } catch (err) {
         console.error("End auction failed:", err);
         alert("Could not end auction yet.");
@@ -248,7 +250,7 @@ export default function Auctions({ auctions, walletAddress, onButtonClick }) {
             <div className="mb-4 p-4 bg-slate-950/50 rounded-lg">
               <p className="text-sm text-gray-400 mb-1">Current Bid</p>
               <p className="text-2xl text-amber-400">
-                {auctions.find((a) => a.id === activeBidAuction)?.currentBid} ETH
+                {activeBidAuction.currentBid} ETH
               </p>
             </div>
 
@@ -268,7 +270,7 @@ export default function Auctions({ auctions, walletAddress, onButtonClick }) {
             <div className="flex gap-4">
               <button
                 onClick={() => {
-                  setBidAuction(null);
+                  setActiveBidAuction(null);
                   setBidAmount('');
                 }}
                 className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all duration-300"
@@ -279,7 +281,7 @@ export default function Auctions({ auctions, walletAddress, onButtonClick }) {
                 onClick={handlePlaceBid}
                 disabled={
                   !bidAmount ||
-                  parseFloat(bidAmount) <= (auctions.find((a) => a.id === bidAuction)?.currentBid || 0)
+                  parseFloat(bidAmount) <= parseFloat(activeBidAuction.currentBid)
                 }
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-amber-600 to-yellow-500 text-black rounded-lg hover:shadow-[0_0_30px_rgba(251,191,36,0.5)] transition-all duration-300 disabled:opacity-50"
               >

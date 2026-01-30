@@ -165,26 +165,36 @@ contract MythicNFTMarketplace is ERC721URIStorage, ReentrancyGuard, Ownable {
 
     // End auction and transfer NFT to winner
     function endAuction(uint256 tokenId) public nonReentrant {
-        require(nftItems[tokenId].isInAuction, "NFT is not in auction");
-        require(block.timestamp >= nftItems[tokenId].auctionEndTime, "Auction is still running");
+        NFTItem storage item = nftItems[tokenId];
+        require(item.isInAuction, "NFT is not in auction");
+        require(block.timestamp >= item.auctionEndTime, "Auction is still running");
         
-        address winner = nftItems[tokenId].highestBidder;
-        uint256 finalPrice = nftItems[tokenId].highestBid;
-        address seller = nftItems[tokenId].owner;
+        address winner = item.highestBidder;
+        uint256 finalPrice = item.highestBid;
+        address seller = item.owner;
         
-        // Transfer NFT to winner
-        _transfer(seller, winner, tokenId);
+        // 1. Mark auction as ended immediately to prevent re-entry
+        item.isInAuction = false;
         
-        // Transfer funds to the seller
-        (bool sent, ) = seller.call{value: finalPrice}("");
-        require(sent, "Payment to seller failed");
-        
-        nftItems[tokenId].owner = winner;
-        nftItems[tokenId].isInAuction = false;
+        // 2. ONLY proceed with transfer/payment if there was a bidder
+        if (winner != address(0)) {
+            // Transfer funds to the seller from the contract balance
+            (bool sent, ) = seller.call{value: finalPrice}("");
+            require(sent, "Payment to seller failed");
+            
+            // Transfer ownership of the NFT
+            _transfer(seller, winner, tokenId);
+            item.owner = winner;
+        } 
+        // If winner is address(0), nobody bid. Auction ends, owner keeps the NFT.
+
+        // 3. Clear sale/auction status so it's fresh for the new owner
+        item.isForSale = false;
+        item.highestBid = 0;
+        item.highestBidder = address(0);
         
         emit AuctionEnded(tokenId, winner, finalPrice);
-    }
-    
+    }    
     // Request to purchase an NFT from another user (off-chain agreement)
     function requestPurchase(uint256 tokenId, uint256 offeredPrice) public nonReentrant {
         require(ownerOf(tokenId) != msg.sender, "You cannot request to buy your own NFT");

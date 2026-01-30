@@ -273,6 +273,7 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
                   auctions={auctions} // Check that this variable is the one we set in loadData
                   walletAddress={walletAddress} 
                   onButtonClick={handleButtonClick} 
+                  onSuccess={loadData}
                 />
               )}
               
