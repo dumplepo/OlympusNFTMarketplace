@@ -1,196 +1,192 @@
-import { useState, useEffect, useRef } from 'react';
+import Collections from './sections/Collections'; 
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Zap, Wallet, ChevronUp } from 'lucide-react';
+import { BrowserProvider, Contract, formatEther, parseEther } from 'ethers';
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../utils/contractConfig';
+
 import StatusBar from './StatusBar';
 import Toolbar from './Toolbar';
 import MyNFTs from './sections/MyNFTs';
 import Marketplace from './sections/Marketplace';
-import Collections from './sections/Collections';
 import Auctions from './sections/Auctions';
 import MintNFT from './sections/MintNFT';
 import Footer from './Footer';
 import LightningEffect from './LightningEffect';
-import { mockNFTs, mockAuctions } from '../data/mockData';
+
+const fetchMetadata = async (url) => {
+  try {
+    const response = await fetch(url.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/'));
+    return await response.json();
+  } catch (err) {
+    return { name: "Unknown Artifact", image: "", attributes: [] };
+  }
+};
 
 export default function MainPage({ walletAddress, onConnect, onDisconnect, isConnecting }) {
   const [activeSection, setActiveSection] = useState('marketplace');
   const [showLightning, setShowLightning] = useState(false);
-  const [showBackToTop, setShowBackToTop] = useState(false);
-  const [nfts, setNfts] = useState(mockNFTs);
-  const [auctions, setAuctions] = useState(mockAuctions);
+  const [nfts, setNfts] = useState([]);
+  const [auctions, setAuctions] = useState([]);
   const [favorites, setFavorites] = useState(new Set());
-  const [purchaseRequests, setPurchaseRequests] = useState([]);
   const contentRef = useRef(null);
 
-  // Update auctions countdown
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setAuctions(prevAuctions =>
-        prevAuctions
-          .map(auction => {
-            const remaining = Math.max(0, auction.endTime - Date.now());
-            return { ...auction, timeRemaining: remaining };
-          })
-          .filter(auction => auction.timeRemaining > 0)
-      );
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+  const loadData = useCallback(async () => {
+    if (!window.ethereum || !walletAddress) return;
 
-  // Scroll listener for back to top button
-  useEffect(() => {
-    const handleScroll = () => {
-      if (contentRef.current) {
-        const scrolled = contentRef.current.scrollTop;
-        setShowBackToTop(scrolled > 1000);
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      const counter = await contract.tokenCounter();
+
+      const tempNfts = [];
+      const tempAuctions = [];
+
+      for (let i = 0; i < Number(counter); i++) {
+        const item = await contract.nftItems(i);
+        
+        // Safety Log: Remove this after it works!
+        console.log(`Token #${i} State:`, { isForSale: item.isForSale, isInAuction: item.isInAuction });
+
+        if (item.isMinted) {
+          const tokenUri = await contract.tokenURI(i);
+          const metadata = await fetchMetadata(tokenUri);
+
+          const nftObj = {
+            id: Number(item.tokenId),
+            tokenId: Number(item.tokenId),
+            name: metadata.name,
+            image: metadata.image ? metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/') : '',
+            // image: metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/'),
+            owner: item.owner.toLowerCase(),
+            creator: item.creator.toLowerCase(),
+            royalty: Number(item.royaltyPercentage),
+            price: formatEther(item.price),
+            isListed: item.isForSale,      // matches item.isForSale
+            inAuction: item.isInAuction,   // matches item.isInAuction
+            category: metadata.attributes?.[0]?.value || "Artifact"
+          };
+
+          tempNfts.push(nftObj);
+
+          // This checks if the blockchain says the NFT is in an auction
+          if (item.isInAuction) {
+            tempAuctions.push({
+              id: `auction-${i}`,
+              nft: nftObj,
+              currentBid: formatEther(item.highestBid), // matches item.highestBid
+              highestBidder: item.highestBidder,
+              endTime: Number(item.auctionEndTime) * 1000, // matches item.auctionEndTime
+            });
+          }
+        }
       }
-    };
 
-    const container = contentRef.current;
-    container?.addEventListener('scroll', handleScroll);
-    return () => container?.removeEventListener('scroll', handleScroll);
-  }, []);
+      setNfts(tempNfts);
+      setAuctions(tempAuctions); // This populates the Auction Section
+    } catch (error) {
+      console.error("The Gods failed to deliver data:", error);
+      alert("Connection to the Divine Network lost. Please check your RPC/MetaMask.");
+    }
+  }, [walletAddress]);
+
+  useEffect(() => { loadData(); }, [loadData, walletAddress]);
 
   const handleButtonClick = (callback) => {
     setShowLightning(true);
-    setTimeout(() => {
-      callback();
-      setShowLightning(false);
-    }, 300);
+    setTimeout(() => { if(callback) callback(); setShowLightning(false); }, 300);
   };
 
   const scrollToTop = () => {
     contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const toggleFavorite = (nftId) => {
-    setFavorites(prev => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(nftId)) {
-        newFavorites.delete(nftId);
-      } else {
-        newFavorites.add(nftId);
+  const handleMint = async (metadata, tokenURI) => {
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      // 1. Execute the mint transaction (price 0, royalty 10% example)
+      const tx = await contract.mintNFT(tokenURI, 0, 10);
+      const receipt = await tx.wait();
+
+      // 2. Extract Token ID from the NFTMinted event logs
+      const event = receipt.logs
+        .map((log) => {
+          try { return contract.interface.parseLog(log); } 
+          catch (e) { return null; }
+        })
+        .find((log) => log && log.name === 'NFTMinted');
+
+      if (event) {
+        const tokenId = event.args.tokenId.toString();
+        
+        // 3. Request MetaMask to track the new NFT
+        try {
+          await window.ethereum.request({
+            method: 'wallet_watchAsset',
+            params: {
+              type: 'ERC721',
+              options: {
+                address: CONTRACT_ADDRESS,
+                tokenId: tokenId,
+              },
+            },
+          });
+        } catch (watchError) {
+          console.warn("MetaMask did not add the asset automatically:", watchError);
+          // Fallback: Notify user to add it manually
+          alert(`Artifact Minted! If it doesn't appear, manually import ID: ${tokenId} in MetaMask.`);
+        }
       }
-      return newFavorites;
-    });
+
+      // Refresh UI
+      await loadData();
+    } catch (error) {
+      console.error("The forge failed at the altar:", error);
+      throw error; // Rethrow so MintNFT.jsx can handle the state
+    }
   };
-
-  const handleListForSale = (nftId, price) => {
-    setNfts(prev =>
-      prev.map(nft =>
-        nft.id === nftId ? { ...nft, price, isListed: true } : nft
-      )
-    );
-  };
-
-  const handleCancelSale = (nftId) => {
-    setNfts(prev =>
-      prev.map(nft =>
-        nft.id === nftId ? { ...nft, isListed: false } : nft
-      )
-    );
-  };
-
-  const handleBuyNFT = (nftId) => {
-    if (!walletAddress) return;
-    setNfts(prev =>
-      prev.map(nft =>
-        nft.id === nftId
-          ? { ...nft, owner: walletAddress, isListed: false }
-          : nft
-      )
-    );
-  };
-
-  const handleTransferNFT = (nftId, recipientAddress) => {
-    setNfts(prev =>
-      prev.map(nft =>
-        nft.id === nftId
-          ? { ...nft, owner: recipientAddress, isListed: false }
-          : nft
-      )
-    );
-  };
-
-  const handleCreateAuction = (nftId, startingPrice, duration) => {
-    const nft = nfts.find(n => n.id === nftId);
-    if (!nft) return;
-
-    const newAuction = {
-      id: `auction-${Date.now()}`,
-      nft,
-      startingPrice,
-      currentBid: startingPrice,
-      highestBidder: null,
-      endTime: Date.now() + duration * 1000,
-      timeRemaining: duration * 1000,
-      bids: [],
-    };
-
-    setAuctions(prev => [...prev, newAuction]);
-    setNfts(prev =>
-      prev.map(n =>
-        n.id === nftId ? { ...n, isListed: false, inAuction: true } : n
-      )
-    );
-  };
-
-  const handlePlaceBid = (auctionId, bidAmount) => {
-    if (!walletAddress) return;
-    setAuctions(prev =>
-      prev.map(auction =>
-        auction.id === auctionId
-          ? {
-              ...auction,
-              currentBid: bidAmount,
-              highestBidder: walletAddress,
-              bids: [
-                ...auction.bids,
-                { bidder: walletAddress, amount: bidAmount, timestamp: Date.now() },
-              ],
-            }
-          : auction
-      )
-    );
-  };
-
-  const handleMintNFT = (nft) => {
-    if (!walletAddress) return;
-    const newNFT = {
-      ...nft,
-      id: `nft-${Date.now()}`,
-      tokenId: nfts.length + 1,
-      owner: walletAddress,
-      creator: walletAddress,
-      price: 0,
-      isListed: false,
-    };
-    setNfts(prev => [...prev, newNFT]);
-    setActiveSection('my-nfts');
-  };
-
-  const handlePurchaseRequest = (nftId, offeredPrice) => {
-    if (!walletAddress) return;
-    const request = {
-      id: `request-${Date.now()}`,
-      nftId,
-      requester: walletAddress,
-      offeredPrice,
-      timestamp: Date.now(),
-      status: 'pending',
-    };
-    setPurchaseRequests(prev => [...prev, request]);
-  };
-
-  const myNFTs = nfts.filter(nft => nft.owner === walletAddress);
+  // Filter for 'My NFTs' section
+  const myNFTs = nfts.filter(nft => nft.owner === walletAddress?.toLowerCase());
   const listedNFTs = nfts.filter(nft => nft.isListed);
+
+  const handleBuy = async (id, price) => {
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      const tx = await contract.buyNFT(id, { value: parseEther(price) });
+      await tx.wait();
+      loadData(); // This refreshes the state, moving the NFT to "My NFTs"
+    } catch (err) {
+      console.error("Purchase rejected:", err);
+    }
+  };
+
+  const handleCancelSale = async (id) => {
+    try {
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+      const tx = await contract.cancelSale(id);
+      await tx.wait();
+      loadData(); // This refreshes the state, "removing" it from Marketplace
+    } catch (err) {
+      console.error("Cancel rejected:", err);
+    }
+  };
+
+
 
   return (
     <div className="relative w-full min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-black">
-      {/* Background Effects */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1920&q=80')] bg-cover bg-center opacity-5" />
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-900/10 via-transparent to-blue-900/10" />
+         <div className="absolute inset-0 bg-black/40" />
       </div>
 
       <LightningEffect show={showLightning} />
@@ -216,113 +212,107 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
           <div className="container mx-auto px-6 py-12">
             <AnimatePresence mode="wait">
               {activeSection === 'my-nfts' && (
-                <motion.div
-                  key="my-nfts"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
+                <motion.div 
+                  key="my-nfts" 
+                  initial={{ opacity: 0, y: 20 }} 
+                  animate={{ opacity: 1, y: 0 }} 
                   exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.5 }}
                 >
-                  <MyNFTs
-                    nfts={myNFTs}
-                    favorites={favorites}
-                    onToggleFavorite={toggleFavorite}
-                    onListForSale={handleListForSale}
-                    onTransfer={handleTransferNFT}
-                    onCreateAuction={handleCreateAuction}
+                  <MyNFTs 
+                    nfts={nfts.filter(nft => nft.owner === walletAddress?.toLowerCase())} 
+                    favorites={favorites} 
+                    // This is what was missing:
+                    onSuccess={() => {
+                      loadData(); // Refresh the blockchain data
+                      setActiveSection('marketplace'); // Redirect to Marketplace
+                    }}
+                    onAuctionSuccess={() => {
+                      loadData();
+                      setActiveSection('auctions'); // Redirect to Auctions
+                    }}
+                    onTransferSuccess={() => {
+                      loadData(); // Just refresh the list
+                      alert("Sacred Transfer Complete!");
+                    }}
                     onButtonClick={handleButtonClick}
+                    onToggleFavorite={(id) => {
+                      const newFavs = new Set(favorites);
+                      if (newFavs.has(id)) newFavs.delete(id);
+                      else newFavs.add(id);
+                      setFavorites(newFavs);
+                    }}
                   />
                 </motion.div>
               )}
 
               {activeSection === 'marketplace' && (
-                <motion.div
-                  key="marketplace"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <Marketplace
-                    nfts={listedNFTs}
-                    favorites={favorites}
-                    onToggleFavorite={toggleFavorite}
-                    onBuy={handleBuyNFT}
+                <motion.div key="marketplace" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                  <Marketplace 
+                    nfts={listedNFTs} 
+                    favorites={favorites} 
+                    walletAddress={walletAddress} 
+                    onButtonClick={handleButtonClick}
+                    // Pass these missing functions:
+                    onBuy={handleBuy}
                     onCancelSale={handleCancelSale}
-                    walletAddress={walletAddress}
-                    onButtonClick={handleButtonClick}
-                  />
-                </motion.div>
-              )}
-
-              {activeSection === 'collections' && (
-                <motion.div
-                  key="collections"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <Collections
-                    nfts={nfts}
-                    favorites={favorites}
-                    onToggleFavorite={toggleFavorite}
-                    onListForSale={handleListForSale}
-                    onPurchaseRequest={handlePurchaseRequest}
-                    walletAddress={walletAddress}
-                    onButtonClick={handleButtonClick}
-                  />
-                </motion.div>
-              )}
-
-              {activeSection === 'auctions' && (
-                <motion.div
-                  key="auctions"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <Auctions
-                    auctions={auctions}
-                    walletAddress={walletAddress}
-                    onPlaceBid={handlePlaceBid}
-                    onButtonClick={handleButtonClick}
+                    onToggleFavorite={(id) => {
+                      const newFavs = new Set(favorites);
+                      if (newFavs.has(id)) newFavs.delete(id);
+                      else newFavs.add(id);
+                      setFavorites(newFavs);
+                    }}
                   />
                 </motion.div>
               )}
 
               {activeSection === 'mint' && (
-                <motion.div
-                  key="mint"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <MintNFT
-                    onMint={handleMintNFT}
-                    onButtonClick={handleButtonClick}
-                  />
+                <motion.div key="mint" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                  <MintNFT onMint={handleMint} onButtonClick={handleButtonClick} />
                 </motion.div>
               )}
+
+              {activeSection === 'auctions' && (
+                <Auctions 
+                  auctions={auctions} // Check that this variable is the one we set in loadData
+                  walletAddress={walletAddress} 
+                  onButtonClick={handleButtonClick} 
+                  onSuccess={loadData}
+                />
+              )}
+              
+              {activeSection === 'collections' && (
+                <Collections
+                  nfts={nfts} // Changed 'allNFTs' to 'nfts' to match your state variable
+                  walletAddress={walletAddress}
+                  favorites={favorites}
+                  onToggleFavorite={(id) => {
+                    const newFavs = new Set(favorites);
+                    if (newFavs.has(id)) newFavs.delete(id);
+                    else newFavs.add(id);
+                    setFavorites(newFavs);
+                  }}
+                  onButtonClick={handleButtonClick}
+                  // These can be empty functions if not implemented yet
+                  onListForSale={() => alert("Coming soon to archives!")}
+                  onPurchaseRequest={() => alert("Inquiry sent to the Gods!")}
+                />
+              )}
+              
             </AnimatePresence>
           </div>
-
           <Footer nfts={nfts} auctions={auctions} />
         </div>
 
-        {/* Back to Top Button */}
         <AnimatePresence>
-          {showBackToTop && (
+          {scrollToTop && (
             <motion.button
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
               onClick={() => handleButtonClick(scrollToTop)}
-              className="fixed bottom-8 right-8 z-50 p-4 bg-gradient-to-r from-amber-600 to-yellow-500 text-black rounded-full shadow-[0_0_30px_rgba(251,191,36,0.5)] hover:shadow-[0_0_40px_rgba(251,191,36,0.7)] transition-all duration-300 hover:scale-110"
+              className="fixed bottom-8 right-8 z-50 p-4 bg-amber-500 text-black rounded-full"
             >
-              <ChevronUp className="w-6 h-6" />
+              {/* <ChevronUp className="w-6 h-6" /> */}
             </motion.button>
           )}
         </AnimatePresence>

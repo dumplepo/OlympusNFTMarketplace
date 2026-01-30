@@ -22,8 +22,10 @@ contract MythicNFTMarketplace is ERC721URIStorage, ReentrancyGuard, Ownable {
 
     struct NFTItem {
         uint256 tokenId;
+        address creator;
         address owner;
         uint256 price;
+        uint256 royaltyPercentage;
         bool isForSale;
         bool isInAuction;
         uint256 auctionStartTime;
@@ -53,17 +55,18 @@ contract MythicNFTMarketplace is ERC721URIStorage, ReentrancyGuard, Ownable {
 
     // Minting a new NFT
     function mintNFT(string memory _tokenURI, uint256 _price, uint256 _royalty) public nonReentrant returns (uint256) {
+        require(_royalty <= 50, "Royalty cannot exceed 50%"); // Safety check
         uint256 tokenId = tokenCounter++;
         
-        // Mint the NFT
         _mint(msg.sender, tokenId);
         _setTokenURI(tokenId, _tokenURI);
         
-        // Create the NFTItem
         nftItems[tokenId] = NFTItem({
             tokenId: tokenId,
+            creator: msg.sender, // Store original creator
             owner: msg.sender,
             price: _price,
+            royaltyPercentage: _royalty, // Store the percentage
             isForSale: false,
             isInAuction: false,
             auctionStartTime: 0,
@@ -98,23 +101,65 @@ contract MythicNFTMarketplace is ERC721URIStorage, ReentrancyGuard, Ownable {
 
     // Buy NFT from marketplace
     function buyNFT(uint256 tokenId) public payable nonReentrant {
-        require(nftItems[tokenId].isForSale, "NFT is not for sale");
-        require(msg.value >= nftItems[tokenId].price, "Insufficient funds");
+        NFTItem storage item = nftItems[tokenId];
+        require(item.isForSale, "NFT is not for sale");
+        require(msg.value >= item.price, "Insufficient funds");
 
-        address seller = nftItems[tokenId].owner;
-        uint256 price = nftItems[tokenId].price;
+        address seller = item.owner;
+        address creator = item.creator;
+        uint256 price = item.price;
         
-        // Transfer funds to the seller
-        (bool sent, ) = seller.call{value: price}("");
-        require(sent, "Failed to send Ether to seller");
+        // Calculate Royalty
+        uint256 royaltyAmount = (price * item.royaltyPercentage) / 100;
+        uint256 sellerProceeds = price - royaltyAmount;
+
+        // 1. Pay Creator Royalty
+        if (royaltyAmount > 0) {
+            (bool royaltySent, ) = creator.call{value: royaltyAmount}("");
+            require(royaltySent, "Failed to send royalty");
+        }
+
+        // 2. Pay Seller
+        (bool sellerSent, ) = seller.call{value: sellerProceeds}("");
+        require(sellerSent, "Failed to send proceeds to seller");
         
-        // Transfer ownership of the NFT
+        // 3. Transfer Ownership
         _transfer(seller, msg.sender, tokenId);
-        
-        nftItems[tokenId].owner = msg.sender;
-        nftItems[tokenId].isForSale = false;
+        item.owner = msg.sender;
+        item.isForSale = false;
         
         emit NFTSold(tokenId, msg.sender, price);
+    }
+
+    function _settleAuctionInternal(uint256 tokenId) internal {
+        NFTItem storage item = nftItems[tokenId];
+        if (!item.isInAuction || block.timestamp < item.auctionEndTime) return;
+
+        address winner = item.highestBidder;
+        uint256 finalPrice = item.highestBid;
+        address seller = item.owner;
+        address creator = item.creator;
+
+        item.isInAuction = false;
+
+        if (winner != address(0)) {
+            // Split Auction payment
+            uint256 royaltyAmount = (finalPrice * item.royaltyPercentage) / 100;
+            uint256 sellerProceeds = finalPrice - royaltyAmount;
+
+            if (royaltyAmount > 0) {
+                (bool royaltySent, ) = creator.call{value: royaltyAmount}("");
+            }
+            (bool sellerSent, ) = seller.call{value: sellerProceeds}("");
+            
+            _transfer(seller, winner, tokenId);
+            item.owner = winner;
+        }
+        
+        item.isForSale = false;
+        item.highestBid = 0;
+        item.highestBidder = address(0);
+        emit AuctionEnded(tokenId, winner, finalPrice);
     }
 
     // Transfer NFT between users
@@ -165,26 +210,36 @@ contract MythicNFTMarketplace is ERC721URIStorage, ReentrancyGuard, Ownable {
 
     // End auction and transfer NFT to winner
     function endAuction(uint256 tokenId) public nonReentrant {
-        require(nftItems[tokenId].isInAuction, "NFT is not in auction");
-        require(block.timestamp >= nftItems[tokenId].auctionEndTime, "Auction is still running");
+        NFTItem storage item = nftItems[tokenId];
+        require(item.isInAuction, "NFT is not in auction");
+        require(block.timestamp >= item.auctionEndTime, "Auction is still running");
         
-        address winner = nftItems[tokenId].highestBidder;
-        uint256 finalPrice = nftItems[tokenId].highestBid;
-        address seller = nftItems[tokenId].owner;
+        address winner = item.highestBidder;
+        uint256 finalPrice = item.highestBid;
+        address seller = item.owner;
         
-        // Transfer NFT to winner
-        _transfer(seller, winner, tokenId);
+        // 1. Mark auction as ended immediately to prevent re-entry
+        item.isInAuction = false;
         
-        // Transfer funds to the seller
-        (bool sent, ) = seller.call{value: finalPrice}("");
-        require(sent, "Payment to seller failed");
-        
-        nftItems[tokenId].owner = winner;
-        nftItems[tokenId].isInAuction = false;
+        // 2. ONLY proceed with transfer/payment if there was a bidder
+        if (winner != address(0)) {
+            // Transfer funds to the seller from the contract balance
+            (bool sent, ) = seller.call{value: finalPrice}("");
+            require(sent, "Payment to seller failed");
+            
+            // Transfer ownership of the NFT
+            _transfer(seller, winner, tokenId);
+            item.owner = winner;
+        } 
+        // If winner is address(0), nobody bid. Auction ends, owner keeps the NFT.
+
+        // 3. Clear sale/auction status so it's fresh for the new owner
+        item.isForSale = false;
+        item.highestBid = 0;
+        item.highestBidder = address(0);
         
         emit AuctionEnded(tokenId, winner, finalPrice);
-    }
-    
+    }    
     // Request to purchase an NFT from another user (off-chain agreement)
     function requestPurchase(uint256 tokenId, uint256 offeredPrice) public nonReentrant {
         require(ownerOf(tokenId) != msg.sender, "You cannot request to buy your own NFT");
