@@ -1,3 +1,4 @@
+import Collections from './sections/Collections'; 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrowserProvider, Contract, formatEther, parseEther } from 'ethers';
@@ -277,7 +278,24 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
                 />
               )}
               
-              {/* Add other sections as needed following this pattern */}
+              {activeSection === 'collections' && (
+                <Collections
+                  nfts={nfts} // Changed 'allNFTs' to 'nfts' to match your state variable
+                  walletAddress={walletAddress}
+                  favorites={favorites}
+                  onToggleFavorite={(id) => {
+                    const newFavs = new Set(favorites);
+                    if (newFavs.has(id)) newFavs.delete(id);
+                    else newFavs.add(id);
+                    setFavorites(newFavs);
+                  }}
+                  onButtonClick={handleButtonClick}
+                  // These can be empty functions if not implemented yet
+                  onListForSale={() => alert("Coming soon to archives!")}
+                  onPurchaseRequest={() => alert("Inquiry sent to the Gods!")}
+                />
+              )}
+              
             </AnimatePresence>
           </div>
           <Footer nfts={nfts} auctions={auctions} />
