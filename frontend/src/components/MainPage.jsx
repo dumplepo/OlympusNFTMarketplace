@@ -91,12 +91,14 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
     }
   }, [walletAddress]);
 
+  
   useEffect(() => {
-    // This will now fire:
-    // 1. When you first open the browser (mount)
-    // 2. Immediately after you connect your wallet
+    if (contentRef.current) {
+      contentRef.current.scrollTo({ top: 0, behavior: 'instant' });
+    }
     loadData();
-  }, [loadData]); 
+  }, [activeSection], [loadData]);  
+
 
   const handleButtonClick = (callback) => {
     setShowLightning(true);
