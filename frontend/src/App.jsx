@@ -11,22 +11,18 @@ export default function App() {
   const [isConnecting, setIsConnecting] = useState(false);
 
   const handleAccountsChanged = useCallback((accounts) => {
-    if (accounts.length > 0) {
-      setWalletAddress(accounts[0]);
-    } else {
-    setWalletAddress(null);
-    setCurrentView('landing');
+    if (walletAddress) {
+      setWalletAddress(null);
+      // alert("Wallet disconnected. Please reconnect manually.");
     }
-  }, []);
+  }, [walletAddress]);
 
   const checkConnection = useCallback(async () => {
     if (window.ethereum) {
       try {
         const provider = new BrowserProvider(window.ethereum);
         const accounts = await provider.listAccounts();
-        if (accounts.length > 0) {
-          setWalletAddress(accounts[0].address);
-        }
+
       } catch (error) {
         console.error("Failed to check connection", error);
       }
@@ -34,28 +30,19 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const checkInitialConnection = async () => {
-      if (window.ethereum) {
-        try {
-          // Check if MetaMask is already connected
-          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-          if (accounts.length > 0) {
-            handleAccountsChanged(accounts);
-          }
-        } catch (err) {
-          console.error("Error checking initial connection:", err);
-        }
-      }
-    };
 
-    checkInitialConnection();
     
-    // Listen for account changes while the app is open
     if (window.ethereum) {
       window.ethereum.on('accountsChanged', handleAccountsChanged);
-      return () => window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      window.ethereum.on('chainChanged', () => window.location.reload());
     }
-  }, [handleAccountsChanged]); 
+
+    return () => {
+      if (window.ethereum && window.ethereum.removeListener) {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      }
+  };
+  }, [handleAccountsChanged]);
 
   const handleEnterMarketplace = () => {
     setCurrentView('main');

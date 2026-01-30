@@ -91,14 +91,7 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
     }
   }, [walletAddress]);
 
-  
-  useEffect(() => {
-    if (contentRef.current) {
-      contentRef.current.scrollTo({ top: 0, behavior: 'instant' });
-    }
-    loadData();
-  }, [activeSection], [loadData]);  
-
+  useEffect(() => { loadData(); }, [loadData, walletAddress]);
 
   const handleButtonClick = (callback) => {
     setShowLightning(true);
