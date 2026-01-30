@@ -91,7 +91,12 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
     }
   }, [walletAddress]);
 
-  useEffect(() => { loadData(); }, [loadData, walletAddress]);
+  useEffect(() => {
+    // Whenever the active section changes, scroll the content container to the top
+    if (contentRef.current) {
+      contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [activeSection]); 
 
   const handleButtonClick = (callback) => {
     setShowLightning(true);
