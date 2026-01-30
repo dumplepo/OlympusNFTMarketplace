@@ -11,12 +11,8 @@ export default function App() {
   const [isConnecting, setIsConnecting] = useState(false);
 
   const handleAccountsChanged = useCallback((accounts) => {
-    if (accounts.length > 0) {
-      setWalletAddress(accounts[0]);
-    } else {
     setWalletAddress(null);
-    setCurrentView('landing');
-    }
+    console.log("Wallet account changed or disconnected. Manual reconnection required.");
   }, []);
 
   const checkConnection = useCallback(async () => {
@@ -34,7 +30,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    checkConnection();
+    // We REMOVE checkConnection() from here to prevent auto-login on refresh
     
     if (window.ethereum) {
       window.ethereum.on('accountsChanged', handleAccountsChanged);
@@ -45,26 +41,25 @@ export default function App() {
       if (window.ethereum && window.ethereum.removeListener) {
         window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
       }
-  };
-  }, [handleAccountsChanged, checkConnection]);
+    };
+  }, [handleAccountsChanged]);
 
   const handleEnterMarketplace = () => {
     setCurrentView('main');
   };
-
   const connectWallet = async () => {
     if (typeof window.ethereum === 'undefined') {
-      alert('Please install MetaMask to interact with Olympus NFT Marketplace!');
+      alert('Please install MetaMask!');
       return;
     }
 
     setIsConnecting(true);
     try {
-      const provider = new BrowserProvider(window.ethereum);
-      const accounts = await provider.send("eth_requestAccounts", []);
+      // This is the ONLY place where we request and set the address
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       setWalletAddress(accounts[0]);
     } catch (error) {
-      console.error("Wallet connection denied or failed", error);
+      console.error("Connection rejected", error);
     } finally {
       setIsConnecting(false);
     }
@@ -72,7 +67,6 @@ export default function App() {
 
   const disconnectWallet = () => {
     setWalletAddress(null);
-    setCurrentView('landing');
   };
 
   return (
