@@ -92,11 +92,11 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
   }, [walletAddress]);
 
   useEffect(() => {
-    // Whenever the active section changes, scroll the content container to the top
-    if (contentRef.current) {
-      contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  }, [activeSection]); 
+    // This will now fire:
+    // 1. When you first open the browser (mount)
+    // 2. Immediately after you connect your wallet
+    loadData();
+  }, [loadData]); 
 
   const handleButtonClick = (callback) => {
     setShowLightning(true);

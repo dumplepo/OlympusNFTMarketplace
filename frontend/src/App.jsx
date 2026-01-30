@@ -11,8 +11,12 @@ export default function App() {
   const [isConnecting, setIsConnecting] = useState(false);
 
   const handleAccountsChanged = useCallback((accounts) => {
+    if (accounts.length > 0) {
+      setWalletAddress(accounts[0]);
+    } else {
     setWalletAddress(null);
-    console.log("Wallet account changed or disconnected. Manual reconnection required.");
+    setCurrentView('landing');
+    }
   }, []);
 
   const checkConnection = useCallback(async () => {
@@ -30,36 +34,46 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // We REMOVE checkConnection() from here to prevent auto-login on refresh
-    
-    if (window.ethereum) {
-      window.ethereum.on('accountsChanged', handleAccountsChanged);
-      window.ethereum.on('chainChanged', () => window.location.reload());
-    }
-
-    return () => {
-      if (window.ethereum && window.ethereum.removeListener) {
-        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+    const checkInitialConnection = async () => {
+      if (window.ethereum) {
+        try {
+          // Check if MetaMask is already connected
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          if (accounts.length > 0) {
+            handleAccountsChanged(accounts);
+          }
+        } catch (err) {
+          console.error("Error checking initial connection:", err);
+        }
       }
     };
-  }, [handleAccountsChanged]);
+
+    checkInitialConnection();
+    
+    // Listen for account changes while the app is open
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+      return () => window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+    }
+  }, [handleAccountsChanged]); 
 
   const handleEnterMarketplace = () => {
     setCurrentView('main');
   };
+
   const connectWallet = async () => {
     if (typeof window.ethereum === 'undefined') {
-      alert('Please install MetaMask!');
+      alert('Please install MetaMask to interact with Olympus NFT Marketplace!');
       return;
     }
 
     setIsConnecting(true);
     try {
-      // This is the ONLY place where we request and set the address
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const provider = new BrowserProvider(window.ethereum);
+      const accounts = await provider.send("eth_requestAccounts", []);
       setWalletAddress(accounts[0]);
     } catch (error) {
-      console.error("Connection rejected", error);
+      console.error("Wallet connection denied or failed", error);
     } finally {
       setIsConnecting(false);
     }
@@ -67,6 +81,7 @@ export default function App() {
 
   const disconnectWallet = () => {
     setWalletAddress(null);
+    setCurrentView('landing');
   };
 
   return (
