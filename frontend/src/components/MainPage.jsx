@@ -30,18 +30,6 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
   const [favorites, setFavorites] = useState(new Set());
   const contentRef = useRef(null);
 
-
-  const handleToggleFavorite = (id) => {
-    const newFavs = new Set(favorites);
-    if (newFavs.has(id)) {
-      newFavs.delete(id);
-    } else {
-      newFavs.add(id);
-    }
-    setFavorites(newFavs);
-  };
-
-
   const loadData = useCallback(async () => {
     if (!window.ethereum || !walletAddress) return;
 
@@ -66,12 +54,14 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
           const metadata = await fetchMetadata(tokenUri);
 
           const nftObj = {
-            id: i.toString(),
-            tokenId: i.toString(),
+            id: Number(item.tokenId),
+            tokenId: Number(item.tokenId),
             name: metadata.name,
             image: metadata.image ? metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/') : '',
             // image: metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/'),
             owner: item.owner.toLowerCase(),
+            creator: item.creator.toLowerCase(),
+            royalty: Number(item.royaltyPercentage),
             price: formatEther(item.price),
             isListed: item.isForSale,      // matches item.isForSale
             inAuction: item.isInAuction,   // matches item.isInAuction
@@ -291,15 +281,22 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
               )}
               
               {activeSection === 'collections' && (
-        <Collections
-          nfts={nfts}
-          walletAddress={walletAddress}
-          favorites={favorites}
-          onToggleFavorite={handleToggleFavorite} // Use the new function here
-          onButtonClick={handleButtonClick}
-          onSuccess={loadData}
-        />
-      )}
+                <Collections
+                  nfts={nfts} // Changed 'allNFTs' to 'nfts' to match your state variable
+                  walletAddress={walletAddress}
+                  favorites={favorites}
+                  onToggleFavorite={(id) => {
+                    const newFavs = new Set(favorites);
+                    if (newFavs.has(id)) newFavs.delete(id);
+                    else newFavs.add(id);
+                    setFavorites(newFavs);
+                  }}
+                  onButtonClick={handleButtonClick}
+                  // These can be empty functions if not implemented yet
+                  onListForSale={() => alert("Coming soon to archives!")}
+                  onPurchaseRequest={() => alert("Inquiry sent to the Gods!")}
+                />
+              )}
               
             </AnimatePresence>
           </div>

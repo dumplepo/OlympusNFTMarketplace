@@ -55,12 +55,15 @@ export default function Marketplace({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <label className="block text-gray-400 mb-2 text-sm">
+              Search Nfts...
+            </label>
+            {/* <Search className=" left-4 -top-2 -translate-y-1/2 w-5 h-5 text-gray-400" /> */}
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search NFTs..."
+              placeholder="Enter NFT name."
               className="w-full pl-12 pr-4 py-3 bg-slate-950 border border-amber-900/30 rounded-lg text-white focus:border-amber-600 focus:outline-none"
             />
           </div>
