@@ -1,6 +1,10 @@
 import { useState } from 'react';
-import { motion } from 'motion/react';
-import { Search, DollarSign, MessageSquare, ShoppingCart } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Search, DollarSign, Send, Gavel, X, ShoppingCart, Info 
+} from 'lucide-react';
+import { BrowserProvider, Contract, parseEther } from 'ethers';
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../utils/contractConfig';
 import NFTCard from '../NFTCard';
 import NFTDetailModal from '../NFTDetailModal';
 
@@ -10,46 +14,76 @@ export default function Collections({
   nfts,
   favorites,
   onToggleFavorite,
-  onListForSale,
-  onPurchaseRequest,
   walletAddress,
   onButtonClick,
+  onSuccess, // To refresh data after actions
 }) {
   const [selectedNFT, setSelectedNFT] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  
+  // Action Modal State (for Sell/Auction/Transfer)
   const [actionNFT, setActionNFT] = useState(null);
-  const [priceInput, setPriceInput] = useState('');
+  const [inputValue, setInputValue] = useState('');
+  const [durationValue, setDurationValue] = useState('');
 
-  // Filter NFTs
   const filteredNFTs = nfts.filter((nft) => {
     const matchesSearch = nft.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || nft.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
-  const handleConfirmAction = () => {
-    if (!actionNFT || !priceInput) return;
+  const handleActionInitiate = (nftId, action) => {
+    setActionNFT({ id: nftId, action });
+    setInputValue('');
+    setDurationValue('');
+  };
 
-    onButtonClick(() => {
-      if (actionNFT.action === 'sell') {
-        onListForSale(actionNFT.id, parseFloat(priceInput));
-      } else if (actionNFT.action === 'request') {
-        onPurchaseRequest(actionNFT.id, parseFloat(priceInput));
+  const handleConfirmAction = async () => {
+    if (!actionNFT || !window.ethereum) return;
+
+    onButtonClick(async () => {
+      try {
+        const provider = new BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+        if (actionNFT.action === 'sell') {
+            const tx = await contract.listNFTForSale(actionNFT.id, parseEther(inputValue));
+            await tx.wait();
+        } else if (actionNFT.action === 'auction') {
+            const tx = await contract.startAuction(actionNFT.id, parseEther(inputValue), parseInt(durationValue));
+            await tx.wait();
+        } else if (actionNFT.action === 'transfer') {
+            const tx = await contract.transferNFT(actionNFT.id, inputValue);
+            await tx.wait();
+        } else if (actionNFT.action === 'cancel') {
+            const currentNft = nfts.find(n => n.id === actionNFT.id);
+            const tx = currentNft.inAuction ? await contract.endAuction(actionNFT.id) : await contract.cancelSale(actionNFT.id);
+            await tx.wait();
+        } else if (actionNFT.action === 'buy') {
+            const targetNft = nfts.find(n => n.id === actionNFT.id);
+            const tx = await contract.buyNFT(actionNFT.id, { value: parseEther(targetNft.price.toString()) });
+            await tx.wait();
+        }
+
+        setActionNFT(null);
+        if (onSuccess) await onSuccess();
+      } catch (err) {
+        console.error("Action failed:", err);
+        alert("The Gods rejected the transaction.");
       }
-      setActionNFT(null);
-      setPriceInput('');
     });
   };
 
   return (
     <div>
       <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="mb-8">
-        <h1 className="text-4xl text-amber-400 mb-2">Divine Collections</h1>
-        <p className="text-gray-400">Explore all NFTs ever minted in the realm of Olympus</p>
+        <h1 className="text-4xl text-amber-400 mb-2">Divine Archive</h1>
+        <p className="text-gray-400">The complete history of artifacts summoned to Olympus</p>
       </motion.div>
 
-      {/* Filters */}
+      {/* Filters (Simplified) */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mb-8">
         {/* Category Filter */}
         <div className="mb-4 flex flex-wrap gap-3">
@@ -82,151 +116,109 @@ export default function Collections({
       </motion.div>
 
       {/* NFT Grid */}
-      {filteredNFTs.length === 0 ? (
-        <div className="text-center py-20">
-          <p className="text-gray-400 text-xl">No NFTs found</p>
-          <p className="text-gray-500 mt-2">Try a different category or search term</p>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
-            {filteredNFTs.slice(0, 4).map((nft, index) => (
-              <NFTCard
-                key={nft.id}
-                nft={nft}
-                isFavorite={favorites.has(nft.id)}
-                onToggleFavorite={() => onToggleFavorite(nft.id)}
-                onCardClick={() => setSelectedNFT(nft)}
-                index={index}
-                actions={
-                  nft.owner === walletAddress ? (
-                    <button
-                      onClick={() => setActionNFT({ id: nft.id, action: 'sell' })}
-                      className="w-full px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-                    >
-                      <DollarSign className="w-4 h-4" />
-                      Sell
-                    </button>
-                  ) : nft.isListed ? (
-                    <button
-                      onClick={() => onButtonClick(() => {})}
-                      className="w-full px-4 py-2 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-black rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-                    >
-                      <ShoppingCart className="w-4 h-4" />
-                      Buy on Marketplace
-                    </button>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {filteredNFTs.map((nft, index) => {
+          const isMine = nft.owner.toLowerCase() === walletAddress?.toLowerCase();
+          const isListed = nft.isListed;
+          const inAuction = nft.inAuction;
+
+          return (
+            <NFTCard
+              key={nft.id}
+              nft={nft}
+              isFavorite={favorites.has(nft.id)}
+              onToggleFavorite={() => onToggleFavorite(nft.id)}
+              onCardClick={() => setSelectedNFT(nft)}
+              index={index}
+              actions={
+                <div className="flex flex-col gap-2">
+                  {isMine ? (
+                    /* 1. MY NFT */
+                    isListed || inAuction ? (
+                      /* 1.1 Listed mine: State + Cancel */
+                      <>
+                        <div className="py-1 px-2 bg-amber-900/40 border border-amber-500/50 rounded-md text-center">
+                            <span className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm">
+                              {inAuction ? '⚔️ In Auction' : '💰 For Sale'}
+                            </span>
+                        </div>
+                        <button onClick={() => handleActionInitiate(nft.id, 'cancel')} className="w-full px-3 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm">
+                            <X className="w-4 h-4" /> Cancel
+                        </button>
+                      </>
+                    ) : (
+                      /* 1.2 Not listed mine: Sell, Auction, Transfer */
+                      <>
+                        <div className="flex gap-1">
+                            <button onClick={() => handleActionInitiate(nft.id, 'sell')} className="flex-1 flex items-center justify-center gap-1 py-2 bg-green-600 text-white rounded-lg text-xs font-medium"><DollarSign className="w-4 h-4"/> Sell</button>
+                            <button onClick={() => handleActionInitiate(nft.id, 'auction')} className="flex-1 flex items-center justify-center gap-1 py-2 bg-purple-600 text-white rounded-lg text-xs font-medium"><Gavel className="w-4 h-4"/> Auction</button>
+                        </div>
+                        <button onClick={() => handleActionInitiate(nft.id, 'transfer')} className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"><Send className="w-4 h-4"/> Transfer</button>
+                      </>
+                    )
                   ) : (
-                    <button
-                      onClick={() => setActionNFT({ id: nft.id, action: 'request' })}
-                      disabled={!walletAddress}
-                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      Purchase Request
-                    </button>
-                  )
-                }
-              />
-            ))}
-          </div>
+                    /* 2. OTHER USER'S NFT */
+                    isListed ? (
+                      /* 2.1 Listed for Sale: Buy */
+                      <button onClick={() => handleActionInitiate(nft.id, 'buy')} className="flex items-center justify-center gap-2 py-2 bg-amber-600 hover:bg-amber-500 text-black font-bold rounded-lg transition-all">
+                        <ShoppingCart className="w-4 h-4" /> Buy Now
+                      </button>
+                    ) : inAuction ? (
+                      /* 2.2 Listed for Auction: State Only */
+                      <div className="py-2 bg-slate-800/50 border border-purple-500/30 rounded-lg text-center">
+                         <span className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm">⚔️ Active Auction</span>
+                      </div>
+                    ) : (
+                      /* 2.3 Not listed: No Buttons */
+                      <div className="py-2 bg-slate-800/50 border border-purple-500/30 rounded-lg text-center">
+                         <span className="w-full px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm">Not listed</span>
+                      </div>
+                    )
+                  )}
+                </div>
+              }
+            />
+          );
+        })}
+      </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredNFTs.slice(4).map((nft, index) => (
-              <NFTCard
-                key={nft.id}
-                nft={nft}
-                isFavorite={favorites.has(nft.id)}
-                onToggleFavorite={() => onToggleFavorite(nft.id)}
-                onCardClick={() => setSelectedNFT(nft)}
-                index={index + 4}
-                actions={
-                  nft.owner === walletAddress ? (
-                    <button
-                      onClick={() => setActionNFT({ id: nft.id, action: 'sell' })}
-                      className="w-full px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-                    >
-                      <DollarSign className="w-4 h-4" />
-                      Sell
-                    </button>
-                  ) : nft.isListed ? (
-                    <button
-                      onClick={() => onButtonClick(() => {})}
-                      className="w-full px-4 py-2 bg-gradient-to-r from-amber-600 to-yellow-500 hover:from-amber-500 hover:to-yellow-400 text-black rounded-lg transition-all duration-300 flex items-center justify-center gap-2"
-                    >
-                      <ShoppingCart className="w-4 h-4" />
-                      Buy on Marketplace
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setActionNFT({ id: nft.id, action: 'request' })}
-                      disabled={!walletAddress}
-                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      Purchase Request
-                    </button>
-                  )
-                }
-              />
-            ))}
-          </div>
-        </>
-      )}
+      {/* Action Modals (Integrated) */}
+      <AnimatePresence>
+        {actionNFT && (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+                <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-slate-900 border border-amber-900/50 p-6 rounded-2xl max-w-sm w-full">
+                    <h2 className="text-xl text-amber-400 mb-4 capitalize">{actionNFT.action} Artifact</h2>
+                    
+                    {['sell', 'auction'].includes(actionNFT.action) && (
+                        <div className="mb-4">
+                            <label className="text-xs text-gray-500 mb-1 block">Starting/Fixed Price (ETH)</label>
+                            <input type="number" value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full p-2 bg-black border border-amber-900/30 rounded text-white" placeholder="0.05" />
+                        </div>
+                    )}
+                    {actionNFT.action === 'auction' && (
+                        <div className="mb-4">
+                            <label className="text-xs text-gray-500 mb-1 block">Duration (Seconds)</label>
+                            <input type="number" value={durationValue} onChange={(e) => setDurationValue(e.target.value)} className="w-full p-2 bg-black border border-amber-900/30 rounded text-white" placeholder="3600" />
+                        </div>
+                    )}
+                    {actionNFT.action === 'transfer' && (
+                         <div className="mb-4">
+                            <label className="text-xs text-gray-500 mb-1 block">Recipient Address</label>
+                            <input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} className="w-full p-2 bg-black border border-amber-900/30 rounded text-white" placeholder="0x..." />
+                        </div>
+                    )}
+                    {actionNFT.action === 'buy' && <p className="text-gray-400 mb-6 text-sm">Are you sure you want to purchase this artifact for the listed price?</p>}
+                    {actionNFT.action === 'cancel' && <p className="text-gray-400 mb-6 text-sm">Removal will return the artifact to your private vaults.</p>}
 
-      {/* Action Modal */}
-      {actionNFT && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-2xl border-2 border-amber-900/40 max-w-md w-full"
-          >
-            <h3 className="text-2xl text-amber-400 mb-6">
-              {actionNFT.action === 'sell' ? 'List for Sale' : 'Purchase Request'}
-            </h3>
-
-            <div className="mb-6">
-              <label className="block text-gray-400 mb-2">
-                {actionNFT.action === 'sell' ? 'Sale Price (ETH)' : 'Offer Price (ETH)'}
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={priceInput}
-                onChange={(e) => setPriceInput(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-950 border border-amber-900/30 rounded-lg text-white focus:border-amber-600 focus:outline-none"
-                placeholder="0.00"
-              />
-              {actionNFT.action === 'request' && (
-                <p className="text-sm text-gray-500 mt-2">
-                  Your offer will be sent to the NFT owner for approval
-                </p>
-              )}
+                    <div className="flex gap-2">
+                        <button onClick={() => setActionNFT(null)} className="flex-1 py-2 bg-slate-800 text-white rounded-lg">Cancel</button>
+                        <button onClick={handleConfirmAction} className="flex-1 py-2 bg-amber-600 text-black font-bold rounded-lg">Confirm</button>
+                    </div>
+                </motion.div>
             </div>
+        )}
+      </AnimatePresence>
 
-            <div className="flex gap-4">
-              <button
-                onClick={() => {
-                  setActionNFT(null);
-                  setPriceInput('');
-                }}
-                className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all duration-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmAction}
-                disabled={!priceInput}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-amber-600 to-yellow-500 text-black rounded-lg hover:shadow-[0_0_30px_rgba(251,191,36,0.5)] transition-all duration-300 disabled:opacity-50"
-              >
-                Confirm
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* NFT Detail Modal */}
       {selectedNFT && <NFTDetailModal nft={selectedNFT} onClose={() => setSelectedNFT(null)} />}
     </div>
   );

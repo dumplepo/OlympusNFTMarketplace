@@ -1,3 +1,4 @@
+import Collections from './sections/Collections'; 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrowserProvider, Contract, formatEther, parseEther } from 'ethers';
@@ -28,6 +29,18 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
   const [auctions, setAuctions] = useState([]);
   const [favorites, setFavorites] = useState(new Set());
   const contentRef = useRef(null);
+
+
+  const handleToggleFavorite = (id) => {
+    const newFavs = new Set(favorites);
+    if (newFavs.has(id)) {
+      newFavs.delete(id);
+    } else {
+      newFavs.add(id);
+    }
+    setFavorites(newFavs);
+  };
+
 
   const loadData = useCallback(async () => {
     if (!window.ethereum || !walletAddress) return;
@@ -277,7 +290,17 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
                 />
               )}
               
-              {/* Add other sections as needed following this pattern */}
+              {activeSection === 'collections' && (
+        <Collections
+          nfts={nfts}
+          walletAddress={walletAddress}
+          favorites={favorites}
+          onToggleFavorite={handleToggleFavorite} // Use the new function here
+          onButtonClick={handleButtonClick}
+          onSuccess={loadData}
+        />
+      )}
+              
             </AnimatePresence>
           </div>
           <Footer nfts={nfts} auctions={auctions} />
