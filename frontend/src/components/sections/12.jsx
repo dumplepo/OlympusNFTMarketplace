@@ -1,299 +1,196 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Clock, Gavel, Trophy, X, AlertCircle } from 'lucide-react';
-import { BrowserProvider, Contract, parseEther } from 'ethers';
-import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../utils/contractConfig';
-import NFTDetailModal from '../NFTDetailModal';
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
 
-export default function Auctions({ auctions, walletAddress, onButtonClick, onSuccess }) {
-  const [selectedNFT, setSelectedNFT] = useState(null);
-  const [activeBidAuction, setActiveBidAuction] = useState(null);
-  const [bidAmount, setBidAmount] = useState('');
-  const [currentTime, setCurrentTime] = useState(Date.now());
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-  // Real-time timer update
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+error NotOwner();
+error AlreadyListed();
+error NotForSale();
+error InsufficientFunds();
+error RoyaltyTooHigh();
+error AuctionActive();
+error AuctionAlreadyEnded(); // Renamed to fix collision
+error BidTooLow();
+error TransferFailed();
+error NoAuctionActive();
+error AuctionStillRunning();
 
-  const formatTime = (endTime) => {
-    const ms = endTime - currentTime;
-    if (ms <= 0) return "Ended";
-    const hours = Math.floor(ms / 3600000);
-    const minutes = Math.floor((ms % 3600000) / 60000);
-    const seconds = Math.floor((ms % 60000) / 1000);
-    return `${hours}h ${minutes}m ${seconds}s`;
-  };
+contract MythicNFTMarketplace is ERC721URIStorage, ReentrancyGuard, Ownable {
 
-  const handlePlaceBid = async () => {
-    if (!activeBidAuction || !bidAmount) return;
+    struct NFTItem {
+        address creator;         // 20 bytes
+        address owner;           // 20 bytes
+        uint256 price;           // 32 bytes
+        uint256 highestBid;      // 32 bytes
+        address highestBidder;   // 20 bytes
+        uint64 auctionStartTime; // 8 bytes
+        uint64 auctionEndTime;   // 8 bytes
+        uint8 royaltyPercentage; // 1 byte
+        bool isForSale;          // 1 byte
+        bool isInAuction;        // 1 byte
+    }
 
-    onButtonClick(async () => {
-      try {
-        const provider = new BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+    mapping(uint256 => NFTItem) public nftItems;
+    uint256 public tokenCounter;
 
-        // Extract tokenId from the unique ID "auction-0"
-        const tokenId = activeBidAuction.nft.tokenId;
+    event NFTMinted(uint256 indexed tokenId, address owner, string tokenURI);
+    event NFTListed(uint256 indexed tokenId, uint256 price);
+    event NFTSold(uint256 indexed tokenId, address buyer, uint256 price);
+    event NFTTransferred(uint256 indexed tokenId, address from, address to);
+    event AuctionStarted(uint256 indexed tokenId, uint256 startPrice, uint256 duration);
+    event NewBid(uint256 indexed tokenId, address bidder, uint256 bidAmount);
+    event AuctionEnded(uint256 indexed tokenId, address winner, uint256 finalPrice);
+
+    constructor() ERC721("MythicNFT", "MNT") Ownable(msg.sender) {}
+
+    function mintNFT(string calldata _tokenURI, uint256 _price, uint8 _royalty) external nonReentrant returns (uint256) {
+        if (_royalty > 50) revert RoyaltyTooHigh();
         
-        const tx = await contract.placeBid(activeBidAuction.nft.tokenId, {
-          value: parseEther(bidAmount)
+        uint256 tokenId = tokenCounter;
+        unchecked { tokenCounter++; }
+        
+        _mint(msg.sender, tokenId);
+        _setTokenURI(tokenId, _tokenURI);
+        
+        nftItems[tokenId] = NFTItem({
+            creator: msg.sender,
+            owner: msg.sender,
+            price: _price,
+            highestBid: 0,
+            highestBidder: address(0),
+            auctionStartTime: 0,
+            auctionEndTime: 0,
+            royaltyPercentage: _royalty,
+            isForSale: false,
+            isInAuction: false
         });
         
-        await tx.wait();
-        alert("Sacrifice accepted! You are the high bidder.");
-        // REPLACEMENT FOR RELOAD:
-        setActiveBidAuction(null); // Close modal
-        setBidAmount('');          // Reset input
+        emit NFTMinted(tokenId, msg.sender, _tokenURI);
+        return tokenId;
+    }
 
-        if (onSuccess) await onSuccess(); // Trigger data refresh in parent
-      } catch (err) {
-        console.error("Bid failed:", err);
-        alert("The Gods rejected your bid. Ensure it is higher than the current one.");
-      }
-    });
-  };
+    function listNFTForSale(uint256 tokenId, uint256 price) external nonReentrant {
+        if (ownerOf(tokenId) != msg.sender) revert NotOwner();
+        NFTItem storage item = nftItems[tokenId];
+        if (item.isForSale) revert AlreadyListed();
+        
+        item.price = price;
+        item.isForSale = true;
+        
+        emit NFTListed(tokenId, price);
+    }
 
-  const handleEndAuction = async (tokenId) => {
-    onButtonClick(async () => {
-      try {
-        const provider = new BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+    function cancelSale(uint256 tokenId) external nonReentrant {
+        if (ownerOf(tokenId) != msg.sender) revert NotOwner();
+        NFTItem storage item = nftItems[tokenId];
+        if (!item.isForSale) revert NotForSale();
+        
+        item.isForSale = false;
+    }
 
-        const tx = await contract.endAuction(tokenId);
-        await tx.wait();
-        alert("The Auction has concluded. Artficat has been transferred.");
-        if (onSuccess) await onSuccess();
-      } catch (err) {
-        console.error("End auction failed:", err);
-        alert("Could not end auction yet.");
-      }
-    });
-  };
+    function buyNFT(uint256 tokenId) external payable nonReentrant {
+        NFTItem storage item = nftItems[tokenId];
+        if (!item.isForSale) revert NotForSale();
+        if (msg.value < item.price) revert InsufficientFunds();
 
-  if (auctions.length === 0) {
-    return (
-      <div className="text-center py-32 border-2 border-dashed border-amber-900/20 rounded-3xl">
-        <AlertCircle className="w-12 h-12 text-amber-900/40 mx-auto mb-4" />
-        <p className="text-gray-500 text-xl font-serif">No active auctions at this time.</p>
-      </div>
-    );
-  }
+        address seller = item.owner;
+        address creator = item.creator;
+        uint256 price = msg.value;
+        
+        uint256 royaltyAmount = (price * item.royaltyPercentage) / 100;
+        
+        item.owner = msg.sender;
+        item.isForSale = false;
 
+        _transfer(seller, msg.sender, tokenId);
 
-  return (
-    <div>
-      <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="mb-8">
-        <h1 className="text-4xl text-amber-400 mb-2">Divine Auctions</h1>
-        <p className="text-gray-400">Bid on sacred artifacts in real-time auctions</p>
-      </motion.div>
+        if (royaltyAmount > 0) {
+            (bool rSent, ) = creator.call{value: royaltyAmount}("");
+            if (!rSent) revert TransferFailed();
+        }
 
-      {auctions.length === 0 ? (
-        <div className="text-center py-20">
-          <p className="text-gray-400 text-xl">No active auctions</p>
-          <p className="text-gray-500 mt-2">Check back later for new auctions</p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          {auctions.map((auction, index) => {
-            const isEnded = auction.endTime <= currentTime;
-            const isOwner = auction.nft.owner === walletAddress?.toLowerCase();
-            const isHighestBidder = auction.highestBidder?.toLowerCase() === walletAddress?.toLowerCase();
+        (bool sSent, ) = seller.call{value: price - royaltyAmount}("");
+        if (!sSent) revert TransferFailed();
+        
+        emit NFTSold(tokenId, msg.sender, price);
+    }
 
-            return (
-              <motion.div
-                key={auction.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-xl border border-amber-900/30 overflow-hidden shadow-[0_0_30px_rgba(0,0,0,0.5)] hover:shadow-[0_0_40px_rgba(251,191,36,0.3)] transition-all duration-500"
-              >
-                <div className="grid md:grid-cols-[400px_1fr] gap-6 p-6">
-                  {/* Left: NFT Image */}
-                  <div
-                    className="relative cursor-pointer rounded-xl overflow-hidden group"
-                    onClick={() => setSelectedNFT(auction.nft)}
-                  >
-                    <img
-                      src={auction.nft.image}
-                      alt={auction.nft.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <h3 className="text-xl text-amber-400 mb-1">{auction.nft.name}</h3>
-                      <p className="text-sm text-gray-300">Token #{auction.nft.tokenId}</p>
-                    </div>
-                  </div>
+    function transferNFT(uint256 tokenId, address recipient) external nonReentrant {
+        if (ownerOf(tokenId) != msg.sender) revert NotOwner();
+        
+        NFTItem storage item = nftItems[tokenId];
+        item.owner = recipient;
+        item.isForSale = false;
+        
+        _transfer(msg.sender, recipient, tokenId);
+        emit NFTTransferred(tokenId, msg.sender, recipient);
+    }
 
-                  {/* Right: Auction Details */}
-                  <div className="flex flex-col justify-between">
-                    <div>
-                      {/* Status */}
-                      <div className="flex items-center gap-3 mb-6">
-                        {isEnded ? (
-                          <div className="px-4 py-2 rounded-full bg-red-900/30 border border-red-600/40 text-red-400 flex items-center gap-2">
-                            <Trophy className="w-4 h-4" />
-                            Auction Ended
-                          </div>
-                        ) : (
-                          <div className="px-4 py-2 rounded-full bg-green-900/30 border border-green-600/40 text-green-400 flex items-center gap-2">
-                            <Clock className="w-4 h-4 animate-pulse" />
-                            Live Auction
-                          </div>
-                        )}
-                        <div className="px-4 py-2 rounded-full bg-amber-900/20 border border-amber-600/40 text-amber-400">
-                          {auction.nft.category}
-                        </div>
-                      </div>
+    function startAuction(uint256 tokenId, uint256 startPrice, uint64 duration) external nonReentrant {
+        if (ownerOf(tokenId) != msg.sender) revert NotOwner();
+        NFTItem storage item = nftItems[tokenId];
+        if (item.isInAuction) revert AuctionActive();
+        
+        item.isInAuction = true;
+        item.auctionStartTime = uint64(block.timestamp);
+        item.auctionEndTime = uint64(block.timestamp + duration);
+        item.highestBid = startPrice;
+        item.highestBidder = address(0);
+        
+        emit AuctionStarted(tokenId, startPrice, duration);
+    }
 
-                      {/* Timer */}
-                      <div className="mb-6 p-4 bg-slate-950/50 rounded-lg border border-amber-900/20">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-gray-400">Time Remaining</span>
-                          <Clock className="w-5 h-5 text-amber-400" />
-                        </div>
-                        <div className="text-2xl text-amber-400">
-                          {isEnded ? 'Ended' : formatTime(auction.endTime)}
-                        </div>
-                      </div>
+    function placeBid(uint256 tokenId) external payable nonReentrant {
+        NFTItem storage item = nftItems[tokenId];
+        if (!item.isInAuction) revert NoAuctionActive();
+        if (block.timestamp >= item.auctionEndTime) revert AuctionAlreadyEnded();
+        if (msg.value <= item.highestBid) revert BidTooLow();
+        
+        address prevBidder = item.highestBidder;
+        uint256 prevBid = item.highestBid;
+        
+        item.highestBidder = msg.sender;
+        item.highestBid = msg.value;
+        
+        if (prevBidder != address(0)) {
+            (bool refunded, ) = prevBidder.call{value: prevBid}("");
+            if (!refunded) revert TransferFailed();
+        }
+        
+        emit NewBid(tokenId, msg.sender, msg.value);
+    }
 
-                      {/* Current Bid */}
-                      <div className="mb-6 p-6 bg-gradient-to-r from-amber-900/20 to-yellow-900/20 rounded-lg border border-amber-600/40">
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <p className="text-sm text-gray-400 mb-1">Current Bid</p>
-                            <p className="text-4xl text-amber-400">{auction.currentBid} ETH</p>
-                          </div>
-                          <Gavel className="w-12 h-12 text-amber-400/30" />
-                        </div>
-                        {auction.highestBidder && (
-                          <div className="pt-4 border-t border-amber-900/30">
-                            <p className="text-sm text-gray-400 mb-1">Highest Bidder</p>
-                            <p className="text-sm text-white">
-                              {auction.highestBidder.slice(0, 10)}...{auction.highestBidder.slice(-8)}
-                            </p>
-                            {isHighestBidder && (
-                              <p className="text-sm text-green-400 mt-2">You are the highest bidder!</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
+    function endAuction(uint256 tokenId) external nonReentrant {
+        NFTItem storage item = nftItems[tokenId];
+        if (!item.isInAuction) revert NoAuctionActive();
+        if (block.timestamp < item.auctionEndTime) revert AuctionStillRunning();
+        
+        address winner = item.highestBidder;
+        uint256 finalPrice = item.highestBid;
+        address seller = item.owner;
 
-                      {/* Bid History */}
-                      {/* {auction.bids.length > 0 && (
-                        <div className="mb-4">
-                          <h4 className="text-gray-400 mb-3">Recent Bids</h4>
-                          <div className="space-y-2 max-h-32 overflow-y-auto">
-                            {auction.bids.slice().reverse().map((bid, i) => (
-                              <div key={i} className="flex items-center justify-between p-3 bg-slate-950/50 rounded-lg text-sm">
-                                <span className="text-gray-400">
-                                  {bid.bidder.slice(0, 8)}...{bid.bidder.slice(-6)}
-                                </span>
-                                <span className="text-amber-400">{bid.amount} ETH</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )} */}
-                    </div>
+        item.isInAuction = false;
+        item.isForSale = false;
 
-                    {/* Bid Button */}
-                  {!isEnded ? (
-                    !isOwner && (
-                      <button
-                        onClick={() => setActiveBidAuction(auction)}
-                        className="w-full py-4 bg-gradient-to-r from-amber-600 to-yellow-500 text-black font-bold rounded-xl hover:shadow-[0_0_20px_rgba(251,191,36,0.3)] transition-all flex items-center justify-center gap-2"
-                      >
-                        <Gavel className="w-5 h-5" /> PLACE BID
-                      </button>
-                    )
-                  ) : (
-                    <button
-                      onClick={() => handleEndAuction(auction.nft.tokenId)}
-                      className="w-full py-4 bg-slate-800 text-amber-400 border border-amber-400/30 font-bold rounded-xl hover:bg-amber-400 hover:text-black transition-all"
-                    >
-                      <Trophy className="w-5 h-5 inline mr-2" /> 
-                      {isOwner ? "SETTLE AUCTION" : "CLAIM ARTIFACT"}
-                    </button>
-                  )}
+        if (winner != address(0)) {
+            uint256 royaltyAmount = (finalPrice * item.royaltyPercentage) / 100;
+            item.owner = winner;
+            _transfer(seller, winner, tokenId);
 
-                    {isEnded && auction.highestBidder && (
-                      <div className="p-4 bg-amber-900/20 border border-amber-600/40 rounded-lg">
-                        <p className="text-center text-amber-400">
-                          <Trophy className="w-5 h-5 inline mr-2" />
-                          Winner: {auction.highestBidder.slice(0, 8)}...{auction.highestBidder.slice(-6)}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      )}
+            if (royaltyAmount > 0) {
+                (bool rSent, ) = item.creator.call{value: royaltyAmount}("");
+                if (!rSent) revert TransferFailed();
+            }
+            (bool sSent, ) = seller.call{value: finalPrice - royaltyAmount}("");
+            if (!sSent) revert TransferFailed();
+        }
+        
+        emit AuctionEnded(tokenId, winner, finalPrice);
+    }
 
-      {/* Bid Modal */}
-      {activeBidAuction && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-2xl border-2 border-amber-900/40 max-w-md w-full"
-          >
-            <h3 className="text-2xl text-amber-400 mb-6">Place Your Bid</h3>
-
-            <div className="mb-4 p-4 bg-slate-950/50 rounded-lg">
-              <p className="text-sm text-gray-400 mb-1">Current Bid</p>
-              <p className="text-2xl text-amber-400">
-                {activeBidAuction.currentBid} ETH
-              </p>
-            </div>
-
-            <div className="mb-6">
-              <label className="block text-gray-400 mb-2">Your Bid (ETH)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={bidAmount}
-                onChange={(e) => setBidAmount(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-950 border border-amber-900/30 rounded-lg text-white focus:border-amber-600 focus:outline-none"
-                placeholder="0.00"
-              />
-              <p className="text-sm text-gray-500 mt-2">Must be higher than the current bid</p>
-            </div>
-
-            <div className="flex gap-4">
-              <button
-                onClick={() => {
-                  setActiveBidAuction(null);
-                  setBidAmount('');
-                }}
-                className="flex-1 px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all duration-300"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handlePlaceBid}
-                disabled={
-                  !bidAmount ||
-                  parseFloat(bidAmount) <= parseFloat(activeBidAuction.currentBid)
-                }
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-amber-600 to-yellow-500 text-black rounded-lg hover:shadow-[0_0_30px_rgba(251,191,36,0.5)] transition-all duration-300 disabled:opacity-50"
-              >
-                Confirm Bid
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* NFT Detail Modal */}
-      {selectedNFT && <NFTDetailModal nft={selectedNFT} onClose={() => setSelectedNFT(null)} />}
-    </div>
-  );
+    function getNFTDetails(uint256 tokenId) external view returns (NFTItem memory) {
+        return nftItems[tokenId];
+    }
 }
