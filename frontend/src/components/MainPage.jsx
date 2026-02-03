@@ -45,39 +45,43 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
 
       for (let i = 0; i < Number(counter); i++) {
         const item = await contract.nftItems(i);
+        const exists = item.owner && item.owner !== '0x' + '0'.repeat(40);
         
-        // Safety Log: Remove this after it works!
-        console.log(`Token #${i} State:`, { isForSale: item.isForSale, isInAuction: item.isInAuction });
-
-        if (item.isMinted) {
+        if (exists) {
           const tokenUri = await contract.tokenURI(i);
           const metadata = await fetchMetadata(tokenUri);
 
+          const currentTime = Date.now();
+          const auctionEndTime = Number(item.auctionEndTime) * 1000;
+          const isExpired = item.isInAuction && currentTime > auctionEndTime && item.highestBidder !== '0x' + '0'.repeat(40);
+
           const nftObj = {
-            id: Number(item.tokenId),
-            tokenId: Number(item.tokenId),
+            id: i,
+            tokenId: i,
             name: metadata.name,
-            image: metadata.image ? metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/') : '',
-            // image: metadata.image.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/'),
-            owner: item.owner.toLowerCase(),
+            image: metadata.image?.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/') || '',
+            // VIRTUAL OWNER: If expired, the winner "owns" it in the UI
+            owner: isExpired ? item.highestBidder.toLowerCase() : item.owner.toLowerCase(),
+            originalOwner: item.owner.toLowerCase(),
             creator: item.creator.toLowerCase(),
-            royalty: Number(item.royaltyPercentage),
             price: formatEther(item.price),
-            isListed: item.isForSale,      // matches item.isForSale
-            inAuction: item.isInAuction,   // matches item.isInAuction
+            isListed: item.isForSale,
+            inAuction: item.isInAuction,
+            isExpiredAuction: isExpired, // New flag for the UI
+            highestBidder: item.highestBidder.toLowerCase(),
             category: metadata.attributes?.[0]?.value || "Artifact"
           };
 
           tempNfts.push(nftObj);
 
           // This checks if the blockchain says the NFT is in an auction
-          if (item.isInAuction) {
+          if (item.isInAuction && !isExpired) {
             tempAuctions.push({
               id: `auction-${i}`,
               nft: nftObj,
-              currentBid: formatEther(item.highestBid), // matches item.highestBid
+              currentBid: formatEther(item.highestBid),
               highestBidder: item.highestBidder,
-              endTime: Number(item.auctionEndTime) * 1000, // matches item.auctionEndTime
+              endTime: auctionEndTime,
             });
           }
         }
@@ -109,7 +113,7 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
       const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
       // 1. Execute the mint transaction (price 0, royalty 10% example)
-      const tx = await contract.mintNFT(tokenURI, 0, 10);
+      const tx = await contract.mintNFT(tokenURI, 0.0, 10);
       const receipt = await tx.wait();
 
       // 2. Extract Token ID from the NFTMinted event logs

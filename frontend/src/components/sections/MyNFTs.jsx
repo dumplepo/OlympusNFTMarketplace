@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DollarSign, Send, Gavel, X, Ban } from 'lucide-react';
 import { BrowserProvider, Contract, parseEther } from 'ethers';
+import { DollarSign, Send, Gavel, X, Trophy } from 'lucide-react';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../utils/contractConfig';
 import NFTCard from '../NFTCard';
 import NFTDetailModal from '../NFTDetailModal';
@@ -68,6 +68,11 @@ export default function MyNFTs({
           // This must be called to refresh the data and switch tabs
           onAuctionSuccess(); 
         }
+        else if (actionNFT.action === 'claim') {
+          const tx = await contract.endAuction(actionNFT.id);
+          await tx.wait();
+          onTransferSuccess(); // This will refresh the list and update ownership
+        }
         setActionNFT(null);
       } catch (err) {
         console.error("The Gods rejected the transaction:", err);
@@ -109,7 +114,16 @@ export default function MyNFTs({
                   index={index}
                   actions={
                     <div className="flex flex-col gap-2">
-                      {isActive ? (
+                      {nft.isExpiredAuction ? (
+                        /* PENDING CLAIM STATE: For the Winner */
+                        <button
+                          onClick={() => handleAction(nft.id, 'claim')}
+                          className="w-full px-3 py-2 bg-gradient-to-r from-amber-500 to-yellow-600 text-black font-bold rounded-lg animate-pulse flex items-center justify-center gap-2"
+                        >
+                          <Trophy className="w-4 h-4" />
+                          CLAIM ARTIFACT
+                        </button>
+                      ) : isActive ? (
                         /* LISTED STATE: Show Status and Cancel only */
                         <>
                           <div className="w-full py-2 bg-amber-900/20 border border-amber-500/30 rounded-lg text-center">

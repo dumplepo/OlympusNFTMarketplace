@@ -1,12 +1,24 @@
 require("@nomicfoundation/hardhat-toolbox");
-require("dotenv").config(); // Install dotenv: npm install dotenv
+// require("dotenv").config();
 
 module.exports = {
-  solidity: "0.8.20",
+  solidity: {
+    version: "0.8.20",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+    },
+  },
   networks: {
-    sepolia: {
-      url: process.env.SEPOLIA_RPC_URL || "", // Alchemy/Infura URL
-      accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
+    hardhat: {
+      chainId: 31337,
+    },
+    localhost: {
+      url: "http://127.0.0.1:8545",
+      // For local testing you can omit accounts; Hardhat provides default test accounts
+      // accounts: [`0x${process.env.PRIVATE_KEY}`], 
     },
   },
 };

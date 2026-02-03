@@ -17,6 +17,17 @@ export default function Auctions({ auctions, walletAddress, onButtonClick, onSuc
     return () => clearInterval(timer);
   }, []);
 
+  const activeAuctions = auctions.filter(auction => auction.endTime > currentTime);
+
+    if (activeAuctions.length === 0) {
+    return (
+      <div className="text-center py-32 border-2 border-dashed border-amber-900/20 rounded-3xl">
+        <AlertCircle className="w-12 h-12 text-amber-900/40 mx-auto mb-4" />
+        <p className="text-gray-500 text-xl font-serif">No active auctions at this time.</p>
+      </div>
+    );
+  }
+
   const formatTime = (endTime) => {
     const ms = endTime - currentTime;
     if (ms <= 0) return "Ended";
