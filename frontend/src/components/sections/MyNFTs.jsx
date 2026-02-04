@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { DollarSign, Send, Gavel, X, Trophy, Clock } from 'lucide-react'; 
 import { BrowserProvider, Contract, parseEther } from 'ethers';
-import { DollarSign, Send, Gavel, X, Trophy } from 'lucide-react';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../utils/contractConfig';
 import NFTCard from '../NFTCard';
 import NFTDetailModal from '../NFTDetailModal';
