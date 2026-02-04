@@ -113,12 +113,12 @@ export default function MyNFTs({
                   onCardClick={() => setSelectedNFT(nft)}
                   index={index}
                   actions={
-                    <div className="flex flex-col gap-2">
+                    <div className="py-2 bg-slate-800/50 border border-purple-500/30 rounded-lg text-center">
                       {nft.isExpiredAuction ? (
                         /* PENDING CLAIM STATE: For the Winner */
                         <button
                           onClick={() => handleAction(nft.id, 'claim')}
-                          className="w-full px-3 py-2 bg-gradient-to-r from-amber-500 to-yellow-600 text-black font-bold rounded-lg animate-pulse flex items-center justify-center gap-2"
+                          className="w-full px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
                         >
                           <Trophy className="w-4 h-4" />
                           CLAIM ARTIFACT

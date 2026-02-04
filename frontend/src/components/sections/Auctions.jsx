@@ -13,9 +13,24 @@ export default function Auctions({ auctions, walletAddress, onButtonClick, onSuc
 
   // Real-time timer update
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setCurrentTime(now);
+
+      // AUTO-REFRESH LOGIC:
+      // Check if any auction just crossed the finish line in the last second
+      const hasJustFinished = auctions.some(auction => 
+        auction.endTime <= now && auction.endTime > now - 1100
+      );
+
+      if (hasJustFinished && onSuccess) {
+        console.log("Auction ended! Categorizing rewards...");
+        onSuccess(); // This triggers loadData() in MainPage.jsx
+      }
+    }, 1000);
+    
     return () => clearInterval(timer);
-  }, []);
+  }, [auctions, onSuccess]);
 
   const activeAuctions = auctions.filter(auction => auction.endTime > currentTime);
 

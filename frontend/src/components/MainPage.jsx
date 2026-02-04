@@ -53,8 +53,7 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
 
           const currentTime = Date.now();
           const auctionEndTime = Number(item.auctionEndTime) * 1000;
-          const isExpired = item.isInAuction && currentTime > auctionEndTime && item.highestBidder !== '0x' + '0'.repeat(40);
-
+          const isExpired = item.isInAuction && currentTime > (Number(item.auctionEndTime) * 1000);
           const nftObj = {
             id: i,
             tokenId: i,
