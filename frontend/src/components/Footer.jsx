@@ -8,90 +8,69 @@ export default function Footer({ nfts, auctions }) {
 
   // Generate mock chart data for average NFT value
   useEffect(() => {
+    // Generate mock data for the subtle trend graph
     const generateData = () => {
       const data = [];
-      const now = Date.now();
-      for (let i = 10; i >= 0; i--) {
-        const time = new Date(now - i * 60000); // Last 10 minutes
-        const avgPrice = nfts.length > 0
-          ? nfts.reduce((sum, nft) => sum + nft.price, 0) / nfts.length
-          : 0;
-        const variance = (Math.random() - 0.5) * 2;
-        data.push({
-          time: time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-          value: Math.max(0, avgPrice + variance),
-        });
+      const avgPrice = nfts.length > 0 ? nfts.reduce((sum, n) => sum + parseFloat(n.price), 0) / nfts.length : 0.5;
+      for (let i = 12; i >= 0; i--) {
+        data.push({ time: i, value: avgPrice + (Math.random() - 0.5) * 0.05 });
       }
       return data;
     };
-
     setChartData(generateData());
-
-    // Update every minute
-    const interval = setInterval(() => {
-      setChartData(generateData());
-    }, 60000);
-
-    return () => clearInterval(interval);
   }, [nfts]);
 
   // Get featured NFTs
-  const recentNFT = [...nfts].sort((a, b) => (b.mintedAt || 0) - (a.mintedAt || 0))[0];
-  const highestPricedNFT = [...nfts].sort((a, b) => b.price - a.price)[0];
-  const auctionNFT = auctions[0]?.nft;
+  const recentNFT = [...nfts].sort((a, b) => b.tokenId - a.tokenId)[0];
+  const highestPricedNFT = [...nfts].sort((a, b) => parseFloat(b.price) - parseFloat(a.price))[0];
+  const recentAuctionNFT = [...auctions].sort((a, b) => (b.startTime || 0) - (a.startTime || 0))[0]?.nft;
 
-  const SmallNFTCard = ({ nft, icon: Icon, label }) => (
-    <motion.div
-      whileHover={{ scale: 1.05 }}
-      className="flex-shrink-0 w-64 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-lg border border-amber-900/30 overflow-hidden shadow-[0_0_20px_rgba(0,0,0,0.5)] hover:shadow-[0_0_30px_rgba(251,191,36,0.3)] transition-all duration-300 cursor-pointer"
-    >
-      <div className="relative h-36 overflow-hidden">
-        <img
-          src={nft.image}
-          alt={nft.name}
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
-        <div className="absolute top-2 left-2 px-2 py-1 rounded-full bg-amber-600/90 backdrop-blur-sm text-xs text-black flex items-center gap-1">
-          <Icon className="w-3 h-3" />
-          {label}
-        </div>
+  const FeatureCard = ({ nft, icon: Icon, label, colorClass }) => {
+
+    const cardStyle = {
+      width: '180px',
+      height: `${180 * 1.618}px` 
+    };
+
+    if (!nft) return (
+      <div className="flex-1 aspect-[1/1.618] bg-slate-900/10 border border-dashed border-amber-900/10 rounded-2xl flex flex-col items-center justify-center p-6 text-center">
+        <Icon className="w-8 h-8 text-slate-800 mb-2" />
+        <span className="text-[10px] uppercase tracking-widest text-slate-600">Awaiting {label}</span>
       </div>
-      <div className="p-3">
-        <h4 className="text-sm text-amber-400 truncate mb-1">{nft.name}</h4>
-        <p className="text-xs text-gray-400 mb-2">Token #{nft.tokenId}</p>
-        {nft.price > 0 && (
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-400">Price</span>
-            <span className="text-sm text-amber-400">{nft.price} ETH</span>
+    );
+
+    return (
+      <motion.div
+        whileHover={{ y: -5 }}
+        style={cardStyle}
+        className="bg-gradient-to-b from-slate-900 to-black rounded-xl border border-amber-900/20 overflow-hidden shadow-xl relative group"
+      >
+        {/* Image Section: 61.8% */}
+        <div style={{ height: '61.8%' }} className="w-full overflow-hidden relative">
+          <img src={nft.image} alt={nft.name} className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent" />
+          <div className="absolute top-2 left-2 p-1.5 rounded-full bg-black/60 border border-amber-500/10">
+            <Icon className={`w-3 h-3 ${colorClass}`} />
           </div>
-        )}
-      </div>
-    </motion.div>
-  );
+        </div>
+
+        {/* Info Section: 38.2% */}
+        <div style={{ height: '38.2%' }} className="p-3 flex flex-col justify-between">
+          <div>
+            <h4 className="text-amber-400 text-[9px] tracking-widest uppercase truncate font-bold">{nft.name}</h4>
+            <p className="text-[7px] text-gray-500 uppercase">{label}</p>
+          </div>
+          <div className="flex justify-between items-end">
+            <span className="text-[8px] font-mono text-gray-700">#{nft.tokenId}</span>
+            <span className="text-xs text-amber-200 font-light">{nft.price} <span className="text-[8px] opacity-40">ETH</span></span>
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
 
   return (
     <footer className="relative mt-16 pt-12 pb-8 border-t border-amber-900/30 bg-gradient-to-b from-transparent to-black/50">
-      {/* Scrolling NFT Sections */}
-      <div className="mb-12">
-        <h3 className="text-2xl text-amber-400 mb-6 px-6">Featured NFTs</h3>
-        
-        <div className="relative overflow-hidden">
-          <div className="flex gap-4 px-6 overflow-x-auto scrollbar-hide pb-4">
-            {recentNFT && <SmallNFTCard nft={recentNFT} icon={Clock} label="Recently Minted" />}
-            {highestPricedNFT && <SmallNFTCard nft={highestPricedNFT} icon={TrendingUp} label="Highest Priced" />}
-            {auctionNFT && <SmallNFTCard nft={auctionNFT} icon={Gavel} label="In Auction" />}
-            
-            {/* Duplicate cards for scrolling effect */}
-            {recentNFT && <SmallNFTCard nft={recentNFT} icon={Clock} label="Recently Minted" />}
-            {highestPricedNFT && <SmallNFTCard nft={highestPricedNFT} icon={TrendingUp} label="Highest Priced" />}
-          </div>
-
-          {/* Gradient overlays */}
-          <div className="absolute left-0 top-0 bottom-0 w-20 bg-gradient-to-r from-slate-950 to-transparent pointer-events-none" />
-          <div className="absolute right-0 top-0 bottom-0 w-20 bg-gradient-to-l from-slate-950 to-transparent pointer-events-none" />
-        </div>
-      </div>
 
       {/* Average NFT Value Graph */}
       <div className="px-6 mb-12">

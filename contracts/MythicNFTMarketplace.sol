@@ -217,20 +217,31 @@ contract MythicNFTMarketplace is ERC721URIStorage, ReentrancyGuard, Ownable {
         address winner = item.highestBidder;
         uint256 finalPrice = item.highestBid;
         address seller = item.owner;
+        address creator = item.creator;
         
         // 1. Mark auction as ended immediately to prevent re-entry
         item.isInAuction = false;
         
         // 2. ONLY proceed with transfer/payment if there was a bidder
         if (winner != address(0)) {
-            // Transfer funds to the seller from the contract balance
-            (bool sent, ) = seller.call{value: finalPrice}("");
-            require(sent, "Payment to seller failed");
+            // CALCULATE ROYALTY (Same logic as buyNFT)
+            uint256 royaltyAmount = (finalPrice * item.royaltyPercentage) / 100;
+            uint256 sellerProceeds = finalPrice - royaltyAmount;
+
+            // Pay Creator
+            if (royaltyAmount > 0) {
+                (bool royaltySent, ) = creator.call{value: royaltyAmount}("");
+                require(royaltySent, "Failed to send royalty");
+            }
+
+            // Pay Seller
+            (bool sellerSent, ) = seller.call{value: sellerProceeds}("");
+            require(sellerSent, "Payment to seller failed");
             
-            // Transfer ownership of the NFT
+            // Transfer ownership
             _transfer(seller, winner, tokenId);
             item.owner = winner;
-        } 
+        }
         // If winner is address(0), nobody bid. Auction ends, owner keeps the NFT.
 
         // 3. Clear sale/auction status so it's fresh for the new owner

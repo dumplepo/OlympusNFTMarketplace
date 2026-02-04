@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DollarSign, Send, Gavel, X, Ban } from 'lucide-react';
+import { DollarSign, Send, Gavel, X, Trophy, Clock } from 'lucide-react'; 
 import { BrowserProvider, Contract, parseEther } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../utils/contractConfig';
 import NFTCard from '../NFTCard';
@@ -68,6 +68,11 @@ export default function MyNFTs({
           // This must be called to refresh the data and switch tabs
           onAuctionSuccess(); 
         }
+        else if (actionNFT.action === 'claim') {
+          const tx = await contract.endAuction(actionNFT.id);
+          await tx.wait();
+          onTransferSuccess(); // This will refresh the list and update ownership
+        }
         setActionNFT(null);
       } catch (err) {
         console.error("The Gods rejected the transaction:", err);
@@ -108,8 +113,17 @@ export default function MyNFTs({
                   onCardClick={() => setSelectedNFT(nft)}
                   index={index}
                   actions={
-                    <div className="flex flex-col gap-2">
-                      {isActive ? (
+                    <div className="py-2 bg-slate-800/50 border border-purple-500/30 rounded-lg text-center">
+                      {nft.isExpiredAuction ? (
+                        /* PENDING CLAIM STATE: For the Winner */
+                        <button
+                          onClick={() => handleAction(nft.id, 'claim')}
+                          className="w-full px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg transition-all duration-300 flex items-center justify-center gap-2 text-sm"
+                        >
+                          <Trophy className="w-4 h-4" />
+                          CLAIM ARTIFACT
+                        </button>
+                      ) : isActive ? (
                         /* LISTED STATE: Show Status and Cancel only */
                         <>
                           <div className="w-full py-2 bg-amber-900/20 border border-amber-500/30 rounded-lg text-center">
@@ -178,7 +192,7 @@ export default function MyNFTs({
 
             {actionNFT.action === 'sell' && (
               <div className="mb-6">
-                <label className="block text-gray-400 mb-2">Price (ETH)</label>
+                <label className="block text-gray-400 mb-2">Starting Price (ETH)</label>
                 <input
                   type="number"
                   step="0.01"

@@ -1,0 +1,249 @@
+https://portfolio.lewishadden.com/
+
+🎯 Global Prompt (Base)
+
+Use this first as the foundation prompt:
+
+Act as a senior React frontend engineer and UI/UX designer.
+Generate a fully integrated, production-ready JavaScript/React portfolio website, inspired by the structure and content of the portfolio at portfolio.lewishadden.com, but improved visually and contextually.
+
+Requirements:
+
+Use React, JavaScript (ES6+), CSS Modules or TailwindCSS, and optionally TypeScript.
+
+Focus on responsive design, accessibility (WCAG), performance, and smooth animations.
+
+Avoid Python — output React component code + CSS + realistic content.
+
+Include: Hero, About, Experience, Projects, Skills, Contact, and Footer.
+
+Add visual refinements: parallax, transitions, hover effects, and mobile-optimized UX.
+
+Write actual code for each component with placeholder content that AI can refine further.
+
+🧱 Section-by-Section AI Prompts
+1️⃣ Hero / Introduction Component
+
+Generate a Hero section component in React.
+
+Include:
+
+A professional portrait image
+
+Greeting like “Hello! I’m [Name]”
+
+Short tagline emphasizing JavaScript/React strength
+
+Two CTAs: View Projects and Contact
+
+Animations:
+
+Fade-in text
+
+button hover underline
+
+subtle entrance animation
+
+Make the section responsive and centered.
+
+Example content guideline (AI should expand):
+
+“I’m a Senior Full Stack Engineer building scalable web applications with React, Next.js, and modern tooling.”
+
+2️⃣ About Section
+
+Generate a rich About Me component in React that includes:
+
+Personal introduction with voice (not generic)
+
+Career highlight (7+ years, team leadership, impactful projects)
+
+Soft skills (communication, teamwork)
+
+Personal interests (gym, boxing, guitar)
+
+Style:
+
+Two-column layout
+
+Portrait on left, text on right
+
+Smooth fade-in on scroll
+
+Content outline:
+
+Avoid clichés like “passionate developer.” Focus on what you solve and how you work.
+
+3️⃣ Experience Timeline Component
+
+Generate a Timeline or Card List React component for Experience section.
+
+Include (based on Lewis Hadden structure):
+
+Job title
+
+Company
+
+Date range
+
+Tech stack icons
+
+Key responsibility bullets
+
+Segmented with years, color accent on current job.
+
+Animation: progressive reveal on scroll.
+
+Data guidelines:
+Extracted from source: roles such as Lead Full Stack Engineer at ERGO, Cloud Infrastructure Architect at Sopra Steria, Senior Full Stack Developer at IBM, etc.
+
+4️⃣ Projects Showcase
+
+Generate a Projects section in React with card grid layout.
+
+Each project card should include:
+
+Project title
+
+Year
+
+Short problem/solution description
+
+Tech stack icons
+
+Link to project live + GitHub repo
+
+Visual enhancements:
+
+Hover scaling
+
+Filter by year or stack
+
+Lightbox or detailed modal on click
+
+Guide project content using items from the portfolio:
+Sanctions Checker, Oralieve, AirDoctor Webhook, Audi Form Builder, etc.
+
+5️⃣ Skills Grid Component
+
+Generate a Skills component grouped by category with icons and descriptions:
+
+Categories:
+
+Frontend (React, Next.js, TypeScript)
+
+Backend (Node.js, REST APIs)
+
+DevOps (Docker, CI/CD)
+
+Testing (Jest, Storybook)
+
+Each skill should include:
+
+Icon
+
+Skill name
+
+One-line explanation of competency
+
+Style: card grid, animated progress, hover tooltip.
+
+Use list extracted from source: React, Next.js, Vite, SCSS, Jest, AWS, etc.
+
+6️⃣ Contact Form Component
+
+Generate a Contact section component with:
+
+Email display
+
+Phone number
+
+Contact form (Name, Email, Message)
+
+Requirements:
+
+Client-side validation
+
+Accessible labels
+
+Submission feedback (success/error alert)
+
+Feature:
+
+Optional integration with email service (e.g., EmailJS)
+
+Based on portfolio content: email and phone present.
+
+7️⃣ Footer
+
+Generate a Footer component with:
+
+Copyright ©
+
+Social links (GitHub, LinkedIn)
+
+Theme toggler (light/dark mode)
+
+Minimal styling
+
+🎨 Global Style & UI Enhancement Prompt
+
+After you generate core sections, run:
+
+Add global styling:
+
+Responsive grid layout
+
+SCSS variables or Tailwind theming
+
+Smooth scroll behavior
+
+Scroll animations (AOS or custom)
+
+Parallax hero background
+
+Focus on polished UI interactions and mobile usability.
+
+📦 Integration & Code Structure Prompt
+
+When assembling your project:
+
+Set up a React project structure:
+
+components/
+
+sections/
+
+styles/
+
+data/
+
+Include:
+
+Routing with react-router (optional one-page scroll)
+
+State management if needed (React state or Context)
+
+CSS Modules or Tailwind utility classes
+
+Include a data file exporting arrays for experience, skills, and projects so the UI is dynamic and easy to update.
+
+🧠 Content Enrichment Prompts
+
+Use these with your AI to enrich text:
+
+Personality-rich Bio
+
+Rewrite the About Me text to sound authentic, engaging, and reflective, with real motivations and career philosophy.
+
+Projects Descriptions
+
+For each project, generate:
+
+Problem statement
+
+Solution you built
+
+Key technical highlights
+
+What users gained

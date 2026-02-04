@@ -11,18 +11,18 @@ export default function App() {
   const [isConnecting, setIsConnecting] = useState(false);
 
   const handleAccountsChanged = useCallback((accounts) => {
-    setWalletAddress(null);
-    console.log("Wallet account changed or disconnected. Manual reconnection required.");
-  }, []);
+    if (walletAddress) {
+      setWalletAddress(null);
+      // alert("Wallet disconnected. Please reconnect manually.");
+    }
+  }, [walletAddress]);
 
   const checkConnection = useCallback(async () => {
     if (window.ethereum) {
       try {
         const provider = new BrowserProvider(window.ethereum);
         const accounts = await provider.listAccounts();
-        if (accounts.length > 0) {
-          setWalletAddress(accounts[0].address);
-        }
+
       } catch (error) {
         console.error("Failed to check connection", error);
       }
@@ -30,7 +30,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    // We REMOVE checkConnection() from here to prevent auto-login on refresh
+
     
     if (window.ethereum) {
       window.ethereum.on('accountsChanged', handleAccountsChanged);
@@ -41,25 +41,26 @@ export default function App() {
       if (window.ethereum && window.ethereum.removeListener) {
         window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
       }
-    };
+  };
   }, [handleAccountsChanged]);
 
   const handleEnterMarketplace = () => {
     setCurrentView('main');
   };
+
   const connectWallet = async () => {
     if (typeof window.ethereum === 'undefined') {
-      alert('Please install MetaMask!');
+      alert('Please install MetaMask to interact with Olympus NFT Marketplace!');
       return;
     }
 
     setIsConnecting(true);
     try {
-      // This is the ONLY place where we request and set the address
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const provider = new BrowserProvider(window.ethereum);
+      const accounts = await provider.send("eth_requestAccounts", []);
       setWalletAddress(accounts[0]);
     } catch (error) {
-      console.error("Connection rejected", error);
+      console.error("Wallet connection denied or failed", error);
     } finally {
       setIsConnecting(false);
     }
@@ -67,6 +68,7 @@ export default function App() {
 
   const disconnectWallet = () => {
     setWalletAddress(null);
+    setCurrentView('landing');
   };
 
   return (
