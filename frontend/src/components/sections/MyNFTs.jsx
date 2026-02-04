@@ -192,7 +192,7 @@ export default function MyNFTs({
 
             {actionNFT.action === 'sell' && (
               <div className="mb-6">
-                <label className="block text-gray-400 mb-2">Price (ETH)</label>
+                <label className="block text-gray-400 mb-2">Starting Price (ETH)</label>
                 <input
                   type="number"
                   step="0.01"
