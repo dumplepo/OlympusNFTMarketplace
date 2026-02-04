@@ -1,23 +1,28 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-    const MythicNFTMarketplace = await ethers.getContractFactory("MythicNFTMarketplace");
+    const [deployer] = await ethers.getSigners();
 
     console.log("Deploying MythicNFTMarketplace...");
+    console.log("Deployer address:", deployer.address);
 
-    // In Ethers v6, deploy() returns a promise that resolves to the contract instance
+    // ✅ Ethers v6 way
+    const balance = await deployer.provider.getBalance(deployer.address);
+    console.log("Deployer balance:", ethers.formatEther(balance), "ETH");
+
+    if (balance === 0n) {
+        throw new Error("❌ Deployer has 0 ETH on Sepolia. Fund this address.");
+    }
+
+    const MythicNFTMarketplace = await ethers.getContractFactory("MythicNFTMarketplace");
+
     const marketplace = await MythicNFTMarketplace.deploy();
-
-    // Wait for the deployment to be mined/confirmed
     await marketplace.waitForDeployment();
 
-    // Access the address using .target instead of .address
-    console.log("MythicNFTMarketplace deployed to:", await marketplace.getAddress());
+    console.log("✅ MythicNFTMarketplace deployed to:", await marketplace.getAddress());
 }
 
-main()
-    .then(() => process.exit(0))
-    .catch((error) => {
-        console.error(error);
-        process.exit(1);
-    });
+main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+});
