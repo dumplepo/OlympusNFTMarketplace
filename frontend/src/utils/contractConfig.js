@@ -1,4 +1,4 @@
-export const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+export const CONTRACT_ADDRESS = "0x870601b1fD18A2f1f9997763ed34C94b80b808B4";
 
 export const CONTRACT_ABI = [
   "function mintNFT(string _tokenURI, uint256 _price, uint256 _royalty) public returns (uint256)",
