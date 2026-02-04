@@ -31,12 +31,12 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
   const contentRef = useRef(null);
 
   const loadData = useCallback(async () => {
-    if (!window.ethereum || !walletAddress) return;
+    if (!window.ethereum) return;
 
     try {
       const provider = new BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+      // const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
 
       const counter = await contract.tokenCounter();
 
@@ -54,6 +54,7 @@ export default function MainPage({ walletAddress, onConnect, onDisconnect, isCon
           const currentTime = Date.now();
           const auctionEndTime = Number(item.auctionEndTime) * 1000;
           const isExpired = item.isInAuction && currentTime > (Number(item.auctionEndTime) * 1000);
+  
           const nftObj = {
             id: i,
             tokenId: i,
